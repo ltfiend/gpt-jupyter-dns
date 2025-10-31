@@ -1,0 +1,22 @@
+# gpt-jupyter-dns/compose.yml
+services:
+  dns-notebook:
+    build: .
+    image: gpt-jupyter-dns:latest
+    container_name: dns-notebook
+    ports:
+      - "8888:8888"
+    # Map a local folder for persistence
+    volumes:
+      - ./data:/workspace
+      # Optional: pass through your AWS credentials for S3 pulls
+      # - ~/.aws:/home/nbuser/.aws:ro
+      #environment:
+      # Optional: automatically pull notebooks
+      # GIT_URL: "https://github.com/your-org/your-notebooks.git"
+      # S3_URI: "s3://your-bucket/path"
+      # AWS_PROFILE: "default"
+      # Optional: install extra python libs at container start
+      # EXTRA_PIP: "scapy aiohttp"
+    user: "1000:1000"
+
