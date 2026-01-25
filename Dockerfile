@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz \
     awscli \
     iputils-ping \
+    bind9-utils \
   && rm -rf /var/lib/apt/lists/*
 
 # Python libs for notebooks, DNS, and S3/Git integration
@@ -28,15 +29,16 @@ RUN pip install --no-cache-dir \
     gitpython \
     matplotlib \
     pandas \
-    rich
+    rich \
+    tabulate 
 
 # Non-root user
-RUN useradd -m -u 1000 -s /bin/bash nbuser
+RUN groupadd -g 53 named; useradd -m -u 1000 -G 53 -s /bin/bash nbuser
 USER nbuser
 WORKDIR /workspace
 
 # Simple “hello” notebooks directory for first run
-RUN mkdir -p /workspace/notebooks
+# RUN mkdir -p /workspace/notebooks
 
 # Startup helper: pull from Git or S3 if configured
 USER root
