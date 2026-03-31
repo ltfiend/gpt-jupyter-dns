@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping \
     bind9-utils \
     stubby \
+    dnsperf \
     bc \
     # flamethrower runtime libs
     libldns3 libuv1t64 libgnutls30t64 libnghttp2-14 \
