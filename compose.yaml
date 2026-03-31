@@ -2,13 +2,13 @@
 services:
   dns-notebook:
     build: .
-    image: gpt-jupyter-dns:latest
+    image: registry.devries.tv/gpt-jupyter-dns:claude
     container_name: dns-notebook
     ports:
       - "8888:8888"
     # Map a local folder for persistence
     volumes:
-      - ./data:/workspace
+      - /home/peter/Git/gpt-jupyter-dns/workspace:/workspace
       # Optional: pass through your AWS credentials for S3 pulls
       # - ~/.aws:/home/nbuser/.aws:ro
       #environment:
