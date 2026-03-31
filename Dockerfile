@@ -1,4 +1,32 @@
 # dns-notebook/Dockerfile
+
+# ── builder stage: compile flamethrower and dnstrace ──
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates git \
+    # flamethrower build deps
+    g++ meson pkgconf ninja-build \
+    libldns-dev libuv1-dev libgnutls28-dev libnghttp2-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Go from official tarball (Debian's version is too old for dnstrace deps)
+RUN curl -fsSL https://go.dev/dl/go1.24.4.linux-amd64.tar.gz | tar -C /usr/local -xz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# Build flamethrower
+RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrower.git /tmp/flamethrower \
+  && cd /tmp/flamethrower \
+  && meson setup build \
+  && ninja -C build \
+  && cp build/flame /usr/local/bin/flame
+
+# Build dnspyre (actively maintained dnstrace successor) from source
+RUN git clone --branch v3.10.2 --depth 1 https://github.com/Tantalor93/dnspyre.git /tmp/dnspyre \
+  && cd /tmp/dnspyre \
+  && go build -o /usr/local/bin/dnspyre .
+
+# ── runtime stage ──
 FROM python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -17,7 +45,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     awscli \
     iputils-ping \
     bind9-utils \
+    stubby \
+    bc \
+    # flamethrower runtime libs
+    libldns3 libuv1t64 libgnutls30t64 libnghttp2-14 \
   && rm -rf /var/lib/apt/lists/*
+
+# Copy built binaries from builder
+COPY --from=builder /usr/local/bin/flame /usr/local/bin/flame
+COPY --from=builder /usr/local/bin/dnspyre /usr/local/bin/dnspyre
+
+# Install q (natesales/q) DNS client
+RUN curl -fsSL https://github.com/natesales/q/releases/download/v0.19.12/q_0.19.12_linux_amd64.tar.gz \
+    | tar -xz -C /usr/local/bin q
+
+# Install dnsperftest (shell script)
+RUN git clone --depth 1 https://github.com/cleanbrowsing/dnsperftest.git /opt/dnsperftest
 
 # Python libs for notebooks, DNS, and S3/Git integration
 RUN pip install --no-cache-dir \
@@ -30,15 +73,12 @@ RUN pip install --no-cache-dir \
     matplotlib \
     pandas \
     rich \
-    tabulate 
+    tabulate
 
 # Non-root user
 RUN groupadd -g 53 named; useradd -m -u 1000 -G 53 -s /bin/bash nbuser
 USER nbuser
 WORKDIR /workspace
-
-# Simple “hello” notebooks directory for first run
-# RUN mkdir -p /workspace/notebooks
 
 # Startup helper: pull from Git or S3 if configured
 USER root
@@ -49,4 +89,3 @@ USER nbuser
 EXPOSE 8888
 ENTRYPOINT ["tini","--","/usr/local/bin/entrypoint.sh"]
 CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser"]
-
