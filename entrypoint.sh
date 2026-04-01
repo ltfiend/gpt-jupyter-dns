@@ -27,5 +27,8 @@ if [ -n "${S3_URI:-}" ]; then
   aws s3 sync "${S3_URI}" /workspace/notebooks --only-show-errors || true
 fi
 
+# Set default Jupyter token if not provided via environment
+export JUPYTER_TOKEN="${JUPYTER_TOKEN:-dnslab}"
+
 exec "$@"
 

@@ -18,5 +18,8 @@ services:
       # AWS_PROFILE: "default"
       # Optional: install extra python libs at container start
       # EXTRA_PIP: "scapy aiohttp"
+    environment:
+      # Override to change the JupyterLab password (default: dnslab)
+      # JUPYTER_TOKEN: "your-secret-token"
     user: "1000:1000"
 
