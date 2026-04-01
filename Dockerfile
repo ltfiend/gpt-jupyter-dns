@@ -63,6 +63,12 @@ RUN curl -fsSL https://github.com/natesales/q/releases/download/v0.19.12/q_0.19.
 # Install dnsperftest (shell script)
 RUN git clone --depth 1 https://github.com/cleanbrowsing/dnsperftest.git /opt/dnsperftest
 
+# Install dot-cert-tester (DoT certificate testing tool)
+RUN curl -fsSL https://raw.githubusercontent.com/ltfiend/dns-scripts/main/dot-cert-tester.py \
+    -o /opt/dot-cert-tester.py \
+  && chmod +x /opt/dot-cert-tester.py \
+  && ln -s /opt/dot-cert-tester.py /usr/bin/dot-cert-tester
+
 # Python libs for notebooks, DNS, and S3/Git integration
 RUN pip install --no-cache-dir \
     jupyterlab \
@@ -78,6 +84,7 @@ RUN pip install --no-cache-dir \
 
 # Non-root user
 RUN groupadd -g 53 named; useradd -m -u 1000 -G 53 -s /bin/bash nbuser
+RUN mkdir /workspace; chown nbuser:named /workspace
 USER nbuser
 WORKDIR /workspace
 
