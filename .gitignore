@@ -1,5 +1,6 @@
 data/*
 !data/dns-examples.ipynb
+!data/dns-dot-migration-test.ipynb
 workspace/
 
 # Secrets and credentials
