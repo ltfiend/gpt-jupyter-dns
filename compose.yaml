@@ -11,15 +11,14 @@ services:
       - /home/peter/Git/gpt-jupyter-dns/workspace:/workspace
       # Optional: pass through your AWS credentials for S3 pulls
       # - ~/.aws:/home/nbuser/.aws:ro
-      #environment:
+    environment:
+      # Override to change the JupyterLab password (default: dnslab)
+      # JUPYTER_TOKEN: "your-secret-token"
       # Optional: automatically pull notebooks
       # GIT_URL: "https://github.com/your-org/your-notebooks.git"
       # S3_URI: "s3://your-bucket/path"
       # AWS_PROFILE: "default"
       # Optional: install extra python libs at container start
       # EXTRA_PIP: "scapy aiohttp"
-    environment:
-      # Override to change the JupyterLab password (default: dnslab)
-      # JUPYTER_TOKEN: "your-secret-token"
     user: "1000:1000"
 

@@ -99,5 +99,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 USER nbuser
 
 EXPOSE 8888
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -sf http://localhost:8888/api/status || exit 1
 ENTRYPOINT ["tini","--","/usr/local/bin/entrypoint.sh"]
 CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser"]
