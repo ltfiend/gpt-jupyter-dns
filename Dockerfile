@@ -48,6 +48,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     stubby \
     dnsperf \
     bc \
+    # PDF export via nbconvert
+    pandoc \
+    texlive-xetex texlive-fonts-recommended texlive-plain-generic \
     # flamethrower runtime libs
     libldns3 libuv1t64 libgnutls30t64 libnghttp2-14 \
   && rm -rf /var/lib/apt/lists/*
@@ -80,7 +83,8 @@ RUN pip install --no-cache-dir \
     matplotlib \
     pandas \
     rich \
-    tabulate
+    tabulate \
+    nbconvert
 
 # Non-root user
 RUN groupadd -g 53 named; useradd -m -u 1000 -G 53 -s /bin/bash nbuser
