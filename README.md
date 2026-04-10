@@ -58,10 +58,13 @@ docker compose run -e JUPYTER_TOKEN=mysecret dns-notebook
 
 ## PDF Export
 
-Notebooks can be exported to PDF with results included:
+Notebooks can be exported to PDF with results included. This image uses
+`nbconvert[webpdf]` (headless Chromium via pyppeteer) instead of a LaTeX
+toolchain — the Chromium build is pre-downloaded during image build so
+PDF export works offline.
 
-- **JupyterLab UI:** File → Save and Export Notebook As → PDF
-- **CLI:** `jupyter nbconvert --to pdf notebook.ipynb`
+- **JupyterLab UI:** File → Save and Export Notebook As → WebPDF
+- **CLI:** `jupyter nbconvert --to webpdf notebook.ipynb`
 
 ## Configuration
 
