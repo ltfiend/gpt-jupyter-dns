@@ -2,7 +2,7 @@
 services:
   dns-notebook:
     build: .
-    image: registry.devries.tv/gpt-jupyter-dns:claude
+    image: registry.devries.tv/gpt-jupyter-dns:latest
     container_name: dns-notebook
     ports:
       - "8888:8888"
@@ -11,7 +11,7 @@ services:
       - /home/peter/Git/gpt-jupyter-dns/workspace:/workspace
       # Optional: pass through your AWS credentials for S3 pulls
       # - ~/.aws:/home/nbuser/.aws:ro
-    environment:
+    # environment:
       # Override to change the JupyterLab password (default: dnslab)
       # JUPYTER_TOKEN: "your-secret-token"
       # Optional: automatically pull notebooks

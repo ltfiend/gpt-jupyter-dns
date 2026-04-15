@@ -126,6 +126,10 @@ RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
 RUN groupadd -g 53 named; useradd -m -u 1000 -G 53 -s /bin/bash nbuser
 RUN mkdir /workspace; chown nbuser:named /workspace
 
+# Jupyter server config — disables kernel culling, raises iopub rate
+# limits, and enables websocket keepalive so 30min+ cells survive.
+COPY jupyter_server_config.py /etc/jupyter/jupyter_server_config.py
+
 # Startup helper: pull from Git or S3 if configured
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
@@ -134,7 +138,5 @@ USER nbuser
 WORKDIR /workspace
 
 EXPOSE 8888
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD curl -sf http://localhost:8888/api/status || exit 1
 ENTRYPOINT ["tini","--","/usr/local/bin/entrypoint.sh"]
 CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser"]
