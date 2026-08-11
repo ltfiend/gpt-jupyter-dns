@@ -1,6 +1,7 @@
 data/*
 !data/dns-examples.ipynb
 !data/dns-dot-migration-test.ipynb
+!data/dns-resolver-fuzzer.ipynb
 workspace/
 
 # Secrets and credentials
@@ -11,3 +12,5 @@ credentials*
 
 # Build artifacts
 *.tar.gz
+
+PROMPTS.md
