@@ -237,6 +237,79 @@ class Ec2Provider(Provider):
             if "InvalidPermission.Duplicate" not in str(e):
                 raise _wrap(e, f"re-authorizing ingress on {sg_id}") from e
 
+    # ---- SSM (on-box drive/verify for stub clients) ------------------------
+    def _iam(self):
+        return _session().client("iam")
+
+    def _ensure_ssm_profile(self, name: str = "dnslab-ssm") -> None:
+        """Create the dnslab SSM role + instance profile if missing (idempotent).
+        Grants only AmazonSSMManagedInstanceCore so instances can be driven by
+        SSM Run Command."""
+        iam = self._iam()
+        trust = ('{"Version":"2012-10-17","Statement":[{"Effect":"Allow",'
+                 '"Principal":{"Service":"ec2.amazonaws.com"},'
+                 '"Action":"sts:AssumeRole"}]}')
+        try:
+            iam.create_role(RoleName=name, AssumeRolePolicyDocument=trust,
+                            Tags=[{"Key": TAG, "Value": "1"}])
+            iam.attach_role_policy(
+                RoleName=name,
+                PolicyArn="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
+        except Exception as e:  # noqa: BLE001
+            if "EntityAlreadyExists" not in str(e):
+                raise _wrap(e, f"creating IAM role {name}") from e
+        try:
+            iam.create_instance_profile(InstanceProfileName=name,
+                                        Tags=[{"Key": TAG, "Value": "1"}])
+            iam.add_role_to_instance_profile(InstanceProfileName=name, RoleName=name)
+            import time as _t
+            _t.sleep(10)  # allow the new instance profile to propagate
+        except Exception as e:  # noqa: BLE001
+            if "EntityAlreadyExists" not in str(e):
+                raise _wrap(e, f"creating instance profile {name}") from e
+
+    def _wait_ssm_online(self, instance_id: str, timeout: float) -> None:
+        ssm = self._ssm()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            info = ssm.describe_instance_information(
+                Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
+            )["InstanceInformationList"]
+            if info and info[0]["PingStatus"] == "Online":
+                return
+            time.sleep(10)
+        raise TimeoutError(
+            f"{instance_id}: SSM agent not Online after {timeout}s — the instance "
+            "needs the dnslab-ssm instance profile and outbound HTTPS. It was left "
+            "running; re-run start() to keep waiting or check the EC2 console."
+        )
+
+    def run_command(self, instance_id: str, powershell: str,
+                    timeout: float = 300) -> dict:
+        """Run a PowerShell script on the instance via SSM; return status/out/err."""
+        ssm = self._ssm()
+        try:
+            cmd = ssm.send_command(
+                InstanceIds=[instance_id],
+                DocumentName="AWS-RunPowerShellScript",
+                Parameters={"commands": [powershell]},
+                TimeoutSeconds=int(min(timeout, 3600)),
+            )["Command"]["CommandId"]
+        except Exception as e:  # noqa: BLE001
+            raise _wrap(e, f"sending SSM command to {instance_id}") from e
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            time.sleep(5)
+            try:
+                inv = ssm.get_command_invocation(CommandId=cmd, InstanceId=instance_id)
+            except ssm.exceptions.InvocationDoesNotExist:
+                continue
+            if inv["Status"] not in ("Pending", "InProgress", "Delayed"):
+                return {"status": inv["Status"],
+                        "stdout": inv["StandardOutputContent"],
+                        "stderr": inv["StandardErrorContent"]}
+        raise TimeoutError(f"SSM command {cmd} on {instance_id} did not finish in {timeout}s")
+
     def _ensure_sg(self, ec2, sg_name: str, rdp: bool, tags: list[dict]) -> str:
         """Create (or reuse) the session SG, scoped to the caller's /32."""
         cidr = f"{caller_public_ip()}/32"
@@ -335,6 +408,16 @@ class Ec2Provider(Provider):
         ]
         sg_id = self._ensure_sg(ec2, f"dnslab-{session}", bool(spec.raw.get("rdp")), tags)
 
+        # Optional IAM instance profile (e.g. for SSM Run Command on stub
+        # clients that are verified on-box). The literal "dnslab-ssm" is
+        # created on demand; any other name must already exist.
+        run_kwargs = {}
+        iam_profile = spec.raw.get("iam_instance_profile")
+        if iam_profile:
+            if iam_profile == "dnslab-ssm":
+                self._ensure_ssm_profile()
+            run_kwargs["IamInstanceProfile"] = {"Name": iam_profile}
+
         try:
             resp = ec2.run_instances(
                 ImageId=ami,
@@ -350,6 +433,7 @@ class Ec2Provider(Provider):
                     {"ResourceType": "instance", "Tags": tags},
                     {"ResourceType": "volume", "Tags": tags},
                 ],
+                **run_kwargs,
             )
         except Exception as e:  # noqa: BLE001
             self._delete_sg_quiet(ec2, sg_id)
@@ -377,8 +461,14 @@ class Ec2Provider(Provider):
         )
         self._remember(inst)
 
+        # A stub client has no listener to probe — readiness is "SSM online"
+        # (so we can drive/verify it on-box); everything else is "answers 53".
+        is_client = not spec.capabilities.do53_listener and not spec.capabilities.dot_listener
         if wait:
-            self._wait_healthy(spec, inst, timeout)
+            if is_client:
+                self._wait_ssm_online(instance_id, timeout)
+            else:
+                self._wait_healthy(spec, inst, timeout)
         inst.status = "running"
         self._remember(inst)
         return inst

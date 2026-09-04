@@ -1,0 +1,56 @@
+# windows-client-dot — Windows stub-resolver DNS-over-TLS CLIENT (tier 2).
+#
+# This is NOT a server: it answers no queries. It is a Windows box whose
+# stub resolver is configured for native client-side DoT (the feature that
+# debuted in Windows 11 Insider build 25158 and ships in Windows Server 2025
+# / build 26100, the newest client-DoT-capable Windows available as a stock
+# EC2 AMI). It *makes* queries to the upstream over DoT/853; verification
+# happens on-box via SSM (see checks.windows_dot_client_report), because
+# there is nothing to query from the notebook.
+#
+# Verified live on Server 2025 (10.0.26100): `netsh dns show global` reports
+# "DoT settings: enabled"; `netsh dns add encryption ... dothost=<name>
+# autoupgrade=yes` works; with plaintext 53 blocked outbound, Resolve-DnsName
+# still succeeds and holds ESTABLISHED TCP connections to the upstream:853.
+name: windows-client-dot
+tier: 2
+provider: ec2
+
+ami_ssm_parameter: /aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base
+instance_type: t3.medium
+rdp: false
+start_timeout: 900
+# SSM instance profile so the framework can configure/verify DoT on-box.
+# "dnslab-ssm" is created on demand (AmazonSSMManagedInstanceCore only).
+iam_instance_profile: dnslab-ssm
+
+capabilities:
+  roles: [stub]
+  do53_listener: false     # not a server — no inbound listener at all
+  dot_listener: false
+  dot_upstream_forwarding: false
+  dot_client: true         # the box's stub resolver queries upstreams over DoT
+  notes: >-
+    Windows Server 2025 (build 26100) native client-side DoT via netsh dns.
+    Configured at boot to send stub-resolver queries to the upstream over
+    DoT/853; verified on-box (SSM) by resolving with plaintext 53 blocked and
+    confirming an established :853 connection. Lineage: Windows 11 build 25158.
+
+default_profile: stub-dot
+profiles:
+  stub-dot:
+    template: profiles/stub-dot.ps1.j2
+    # config_path is descriptive-only for ec2 (config arrives as user-data).
+    config_path: /dnslab/userdata.ps1
+    listeners: []
+    # DoT upstreams for the stub resolver: ip + tls_hostname (SNI + cert
+    # validation host). Override per run:
+    #   dnslab.start('windows-client-dot',
+    #                upstreams=[{'ip':'9.9.9.9','tls_hostname':'dns.quad9.net'}])
+    upstreams:
+      - {ip: 1.1.1.1, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, tls_hostname: dns.quad9.net}
+
+# No inbound listeners; ports are nominal (used only for schema/target shape).
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: ".", qtype: "SOA"}

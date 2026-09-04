@@ -19,11 +19,12 @@ class Capabilities:
     the implementation cannot support.
     """
 
-    roles: frozenset[str] = frozenset()  # {"recursive", "forwarder", "authoritative"}
+    roles: frozenset[str] = frozenset()  # {"recursive", "forwarder", "authoritative", "stub"}
     do53_listener: bool = True
     dot_listener: bool = False
     dot_upstream_forwarding: bool = False
     dot_listener_via_proxy: bool = False  # non-native DoT termination (e.g. stunnel)
+    dot_client: bool = False  # stub-resolver DoT: the target sends queries over DoT
     notes: str = ""
 
     @classmethod
@@ -34,6 +35,7 @@ class Capabilities:
             dot_listener=bool(d.get("dot_listener", False)),
             dot_upstream_forwarding=bool(d.get("dot_upstream_forwarding", False)),
             dot_listener_via_proxy=bool(d.get("dot_listener_via_proxy", False)),
+            dot_client=bool(d.get("dot_client", False)),
             notes=str(d.get("notes", "")),
         )
 

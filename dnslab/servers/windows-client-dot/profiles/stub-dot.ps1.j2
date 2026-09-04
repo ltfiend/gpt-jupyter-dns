@@ -1,0 +1,35 @@
+<powershell>
+# dnslab user-data: {{ instance_name }} (windows-client-dot, profile stub-dot)
+# Configures the Windows stub resolver for native client-side DNS-over-TLS
+# (Server 2025 / build 26100) so the box sends its own lookups to the
+# upstream(s) over DoT/853. This box is a CLIENT — it runs no DNS listener.
+$ErrorActionPreference = 'Stop'
+New-Item -ItemType Directory -Force -Path 'C:\dnslab' | Out-Null
+Start-Transcript -Path 'C:\dnslab\userdata.log' -Append
+try {
+    # 1. enable client-side DoT globally
+    netsh dns add global dot=yes | Out-Null
+
+    # 2. register each upstream for DoT (dothost = SNI / cert-validation name;
+    #    autoupgrade=yes forces DoT, udpfallback defaults to no)
+{% for up in upstreams %}
+    netsh dns add encryption server={{ up.ip }} dothost={{ up.tls_hostname }} autoupgrade=yes | Out-Null
+{% endfor %}
+
+    # 3. point the client resolver at the DoT upstream(s) on every IPv4 NIC
+    $servers = @({% for up in upstreams %}'{{ up.ip }}'{% if not loop.last %}, {% endif %}{% endfor %})
+    Get-DnsClientServerAddress -AddressFamily IPv4 |
+        Where-Object { $_.ServerAddresses } |
+        ForEach-Object {
+            Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex `
+                -ServerAddresses $servers -ErrorAction SilentlyContinue
+        }
+    Clear-DnsClientCache
+
+    Set-Content -Path 'C:\dnslab\ready.txt' `
+        -Value ("dnslab {{ instance_name }} DoT stub client ready " + (Get-Date -Format o))
+}
+finally {
+    Stop-Transcript
+}
+</powershell>

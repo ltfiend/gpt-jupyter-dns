@@ -246,6 +246,88 @@ def query_report(target: Target, qname: str, qtype: str = "A", *,
     return row
 
 
+_DOT_CLIENT_PS = r"""
+$ErrorActionPreference='Continue'
+$names = @({names})
+$block = ${block}
+Write-Output "OS: $((Get-CimInstance Win32_OperatingSystem).Caption) $([Environment]::OSVersion.Version)"
+Write-Output "--- netsh dns show encryption ---"
+netsh dns show encryption
+if ($block) {{
+    New-NetFirewallRule -DisplayName 'dnslab-block-udp53' -Direction Outbound -Protocol UDP -RemotePort 53 -Action Block | Out-Null
+    New-NetFirewallRule -DisplayName 'dnslab-block-tcp53' -Direction Outbound -Protocol TCP -RemotePort 53 -Action Block | Out-Null
+    Write-Output "PLAINTEXT_53_BLOCKED: yes (resolution success now proves DoT)"
+}}
+Clear-DnsClientCache
+Start-Sleep -Seconds 2
+foreach ($n in $names) {{
+    $r = Resolve-DnsName $n -Type A -ErrorAction SilentlyContinue
+    $ips = ($r | Where-Object {{$_.IPAddress}} | Select-Object -First 3 -ExpandProperty IPAddress) -join ','
+    if ($ips) {{ Write-Output "RESOLVE $n = NOERROR ($ips)" }} else {{ Write-Output "RESOLVE $n = FAILED" }}
+}}
+Start-Sleep -Seconds 1
+$c = Get-NetTCPConnection -RemotePort 853 -ErrorAction SilentlyContinue
+if ($c) {{ Write-Output ("DOT_853_CONNECTIONS: " + (($c | ForEach-Object {{$_.RemoteAddress}}) -join ',')) }}
+else {{ Write-Output "DOT_853_CONNECTIONS: none" }}
+if ($block) {{
+    Remove-NetFirewallRule -DisplayName 'dnslab-block-udp53' -ErrorAction SilentlyContinue
+    Remove-NetFirewallRule -DisplayName 'dnslab-block-tcp53' -ErrorAction SilentlyContinue
+    Write-Output "PLAINTEXT_53_BLOCK_REMOVED: yes"
+}}
+Write-Output "DONE"
+"""
+
+
+def windows_dot_client_report(name: str = "windows-client-dot",
+                              names=("example.com", "cloudflare.com", "quad9.net"),
+                              block_plaintext: bool = True, timeout: float = 300):
+    """Verify a Windows stub-resolver DoT client ON-BOX via SSM.
+
+    Because the client answers no queries, it can't be tested from the
+    notebook — this runs PowerShell on the instance that (optionally) blocks
+    plaintext 53 outbound, resolves each name, and reports whether an 853/TLS
+    connection to the upstream is established. With block_plaintext=True a
+    successful resolution is proof DoT was used. Returns a dict with the parsed
+    results and the raw transcript; the 53 block is always removed before it
+    returns so the box is left usable.
+    """
+    from .providers import get_provider
+
+    prov = get_provider("ec2")
+    inst = next((i for i in prov.discover()
+                 if name in (i.name, i.server)), None)
+    if inst is None:
+        raise RuntimeError(f"{name!r} is not running — dnslab.start({name!r}) first")
+    ps = _DOT_CLIENT_PS.format(
+        names=",".join(f"'{n}'" for n in names),
+        block="true" if block_plaintext else "false",
+    )
+    res = prov.run_command(inst.id, ps, timeout=timeout)
+    out = res.get("stdout", "")
+    resolves, conns = {}, ""
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("RESOLVE "):
+            body = line[len("RESOLVE "):]
+            qn, _, verdict = body.partition(" = ")
+            resolves[qn] = verdict
+        elif line.startswith("DOT_853_CONNECTIONS:"):
+            conns = line.split(":", 1)[1].strip()
+    dot_used = conns not in ("", "none")
+    all_ok = bool(resolves) and all(v.startswith("NOERROR") for v in resolves.values())
+    return {
+        "instance": inst.name, "id": inst.id, "ssm_status": res.get("status"),
+        "plaintext_53_blocked": block_plaintext,
+        "resolves": resolves,
+        "dot_853_connections": conns,
+        "dot_used": dot_used,
+        # with 53 blocked, resolution success alone proves DoT; otherwise we
+        # require an observed 853 connection too
+        "verdict": "PASS" if (all_ok and (block_plaintext or dot_used)) else "FAIL",
+        "raw": out,
+    }
+
+
 def run_query_matrix(targets: list[Target], queries: list,
                      transports: tuple[str, ...] = ("do53", "dot"),
                      want_dnssec: bool = True):
