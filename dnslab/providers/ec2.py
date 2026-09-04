@@ -263,9 +263,11 @@ class Ec2Provider(Provider):
 
     # ---- lifecycle ---------------------------------------------------------
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
-              *, wait: bool = True, timeout: float = 600, force: bool = False,
-              **overrides) -> Instance:
+              *, wait: bool = True, timeout: float | None = None,
+              force: bool = False, **overrides) -> Instance:
         ec2 = self._ec2()
+        if timeout is None:
+            timeout = float(spec.raw.get("start_timeout", 600))
 
         itype = str(spec.raw.get("instance_type", DEFAULT_INSTANCE_TYPE))
         userdata = self.render_userdata(spec, profile, instance_name, overrides)
@@ -274,34 +276,44 @@ class Ec2Provider(Provider):
             (userdata + "\x00" + itype).encode()).hexdigest()[:16]
 
         # Reuse a live instance whose profile AND rendered user-data are
-        # unchanged (dnslab-confhash tag) and that still answers on 53 —
-        # relaunching Windows costs minutes and money. force=True, config
-        # drift, or a dead responder all fall through to replace-and-launch.
+        # unchanged (dnslab-confhash tag). Crucially, a matching instance is
+        # NEVER torn down here — even one still booting — so re-running start()
+        # keeps waiting instead of relaunching (Windows takes minutes to come
+        # up). Only config drift or force=True reach the replace path below.
         if not force:
+            match = None
             for aws_inst in self._describe(states=("pending", "running")):
                 tags = _tags_dict(aws_inst.get("Tags"))
-                if tags.get(f"{TAG}-instance") != instance_name:
-                    continue
-                if (tags.get(f"{TAG}-profile") == profile.name
-                        and tags.get(f"{TAG}-confhash") == confhash):
-                    reused = next((i for i in self.discover()
-                                   if i.name == instance_name), None)
-                    if reused is not None:
-                        # An unchanged instance can still be unreachable if the
-                        # caller's public IP drifted since launch — re-authorize
-                        # its SG for the current /32 rather than relaunch.
-                        sg_id = (reused.extra or {}).get("sg_id")
-                        if sg_id:
-                            self._authorize_current_ip(ec2, sg_id,
-                                                       bool(spec.raw.get("rdp")))
+                if tags.get(f"{TAG}-instance") == instance_name:
+                    match = tags
+                    break
+            if match is not None and match.get(f"{TAG}-profile") == profile.name \
+                    and match.get(f"{TAG}-confhash") == confhash:
+                reused = next((i for i in self.discover()
+                               if i.name == instance_name), None)
+                if reused is not None:
+                    # An unchanged instance can be unreachable if the caller's
+                    # public IP drifted since launch — re-authorize its SG for
+                    # the current /32 rather than relaunch.
+                    sg_id = (reused.extra or {}).get("sg_id")
+                    if sg_id:
+                        self._authorize_current_ip(ec2, sg_id,
+                                                   bool(spec.raw.get("rdp")))
+                    if wait:
                         try:
-                            self._wait_healthy(spec, reused,
-                                               min(timeout, 30) if wait else 10)
-                            reused.status = "reused " + reused.status
-                            self._remember(reused)
-                            return reused
-                        except (TimeoutError, RuntimeError):
-                            break  # live but not answering — replace it
+                            self._wait_healthy(spec, reused, timeout)
+                        except TimeoutError as e:
+                            raise TimeoutError(
+                                f"{instance_name}: existing instance {reused.id} "
+                                f"({reused.status}) is not answering yet — it was "
+                                "LEFT RUNNING, not relaunched. Re-run start() to "
+                                "keep waiting (Windows first boot takes ~5-10 min), "
+                                "or pass force=True to recreate it."
+                            ) from e
+                    reused.status = "reused " + reused.status
+                    self._remember(reused)
+                    return reused
+            # config drift / different profile → fall through and replace
 
         # replace a previous instance of the same name (mirrors docker)
         for old in self.discover():

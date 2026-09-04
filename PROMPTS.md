@@ -651,3 +651,9 @@ Improve the real upstream notebook to be smarter when starting the servers.  If 
 
 ---
 
+## 2026-09-04 02:05:42
+
+it still seems to be restarting. At least in my execution of real-upstream-lab.ipynb I can't get it to run the windows tests and if I watch dnslab.status I see the windows instance going up and down.
+
+---
+

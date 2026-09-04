@@ -12,8 +12,8 @@ class Provider(ABC):
 
     @abstractmethod
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
-              *, wait: bool = True, timeout: float = 60, force: bool = False,
-              **overrides) -> Instance:
+              *, wait: bool = True, timeout: float | None = None,
+              force: bool = False, **overrides) -> Instance:
         """Start (or reuse) an instance. Providers reuse a healthy running
         instance when the profile and rendered config are unchanged; pass
         force=True to recreate unconditionally."""

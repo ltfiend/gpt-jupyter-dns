@@ -31,14 +31,19 @@ def ca_file() -> str:
 
 
 def start(name: str, profile: str | None = None, *,
-          wait: bool = True, timeout: float = 60, force: bool = False,
+          wait: bool = True, timeout: float | None = None, force: bool = False,
           **overrides) -> list[Instance]:
     """Start a server (all of its declared instances, or its single default one).
 
     Idempotent: a running instance with the same profile and unchanged
     rendered config that still answers its healthcheck is reused (its
-    Instance comes back with status "reused..."); config drift or an
-    unhealthy instance triggers a replace, and force=True always recreates.
+    Instance comes back with status "reused..."); config drift triggers a
+    replace, and force=True always recreates. A matching instance that is
+    still coming up is waited for, never relaunched.
+
+    timeout=None lets each server use its own start budget (manifest
+    `start_timeout`, else the provider default — 60s docker, 600s EC2), so
+    slow-booting targets like Windows aren't cut off mid-boot.
 
     Returns the list of started Instances. Capability `requires` on the
     chosen profile are enforced here so an unsupported combination fails

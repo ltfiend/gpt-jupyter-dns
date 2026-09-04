@@ -134,10 +134,12 @@ class DockerProvider(Provider):
         return h.hexdigest()[:16]
 
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
-              *, wait: bool = True, timeout: float = 60, force: bool = False,
-              **overrides) -> Instance:
+              *, wait: bool = True, timeout: float | None = None,
+              force: bool = False, **overrides) -> Instance:
         import docker
 
+        if timeout is None:
+            timeout = float(spec.raw.get("start_timeout", 60))
         self.ensure_network()
         certs.ensure_cert(instance_name)
         config_file, zones_dir = self.render(spec, profile, instance_name, overrides)
