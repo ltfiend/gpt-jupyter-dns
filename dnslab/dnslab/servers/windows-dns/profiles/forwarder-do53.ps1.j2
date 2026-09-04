@@ -1,0 +1,39 @@
+<powershell>
+# dnslab user-data: {{ instance_name }} (windows-dns, profile forwarder-do53)
+# Installs the DNS Server role as a recursing forwarder on udp+tcp/{{ port_do53 }}.
+# Rendered by the dnslab ec2 provider; runs once at first boot via EC2Launch.
+$ErrorActionPreference = 'Stop'
+New-Item -ItemType Directory -Force -Path 'C:\dnslab' | Out-Null
+Start-Transcript -Path 'C:\dnslab\userdata.log' -Append
+
+try {
+    # 1. DNS Server role
+    Install-WindowsFeature -Name DNS -IncludeManagementTools
+
+    # 2. recursion on (Windows default, made explicit so the profile is honest)
+    Set-DnsServerRecursion -Enable $true
+
+    # 3. upstream forwarders (plain Do53 — the role has no DoT client; see README)
+    $forwarders = @('{{ forwarders.split() | join("','") }}')
+    Set-DnsServerForwarder -IPAddress $forwarders -UseRootHint $true
+
+    # 4. Windows firewall: the role's built-in rules cover 53, but add explicit
+    #    dnslab rules so the lab does not depend on profile-scoped defaults.
+    #    Network-level scoping to the caller's /32 is done by the EC2 SG.
+    New-NetFirewallRule -DisplayName 'dnslab DNS udp/{{ port_do53 }}' `
+        -Direction Inbound -Protocol UDP -LocalPort {{ port_do53 }} -Action Allow | Out-Null
+    New-NetFirewallRule -DisplayName 'dnslab DNS tcp/{{ port_do53 }}' `
+        -Direction Inbound -Protocol TCP -LocalPort {{ port_do53 }} -Action Allow | Out-Null
+
+    # 5. restart so listener + forwarder settings all apply
+    Restart-Service -Name DNS
+
+    # 6. completion marker (the provider's health gate is udp/{{ port_do53 }}
+    #    answering from outside; this file is for RDP/SSM debugging)
+    Set-Content -Path 'C:\dnslab\ready.txt' `
+        -Value ("dnslab {{ instance_name }} ready " + (Get-Date -Format o))
+}
+finally {
+    Stop-Transcript
+}
+</powershell>

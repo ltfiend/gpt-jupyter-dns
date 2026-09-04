@@ -109,25 +109,41 @@ def check_cert(target: Target) -> CheckResult:
         return CheckResult("cert", target.name, "FAIL", repr(e))
 
 
-def check_forwarding(target: Target, *, dot: bool | None = None) -> CheckResult:
-    """A forwarder/recursive target resolves the lab zone's marker record.
+PUBLIC_PROBE = ("example.com", "A")
 
-    For authoritative targets the same query is answered from their own
-    zone, which is equally a PASS — the check proves lab.test resolves
-    through this target at all.
+
+def check_forwarding(target: Target, *, dot: bool | None = None) -> CheckResult:
+    """A forwarder/recursive target resolves through to its upstream.
+
+    Docker-tier targets resolve the lab zone's marker record (their
+    upstreams are the lab-auth pair; authoritative targets answer it from
+    their own zone copy). Non-docker targets (ec2/external) cannot reach
+    the docker-network lab upstreams, so they are probed with a public
+    name instead — proving forwarding works, without a marker claim.
     """
     use_dot = target.port_do53 is None if dot is None else dot
     transport = "dot" if use_dot else "do53"
     if (use_dot and target.port_dot is None) or (not use_dot and target.port_do53 is None):
         return CheckResult("forwarding", target.name, "SKIP", f"no {transport} listener")
+    if target.provider == "docker":
+        qname, qtype = MARKER_QNAME, "TXT"
+    else:
+        qname, qtype = PUBLIC_PROBE
     try:
-        resp, ms = _query(target, MARKER_QNAME, "TXT", dot=use_dot, timeout=10)
-        vals = _txt_values(resp)
-        if vals:
+        resp, ms = _query(target, qname, qtype, dot=use_dot, timeout=10)
+        if qtype == "TXT":
+            vals = _txt_values(resp)
+            if vals:
+                return CheckResult("forwarding", target.name, "PASS",
+                                   f"marker={vals[0]!r} via {transport}", ms)
+            return CheckResult("forwarding", target.name, "FAIL",
+                               f"no TXT answer (rcode={dns.rcode.to_text(resp.rcode())})", ms)
+        if resp.rcode() == 0 and resp.answer:
             return CheckResult("forwarding", target.name, "PASS",
-                               f"marker={vals[0]!r} via {transport}", ms)
+                               f"resolved {qname}/{qtype} via {transport}", ms)
         return CheckResult("forwarding", target.name, "FAIL",
-                           f"no TXT answer (rcode={dns.rcode.to_text(resp.rcode())})", ms)
+                           f"{qname}/{qtype}: rcode={dns.rcode.to_text(resp.rcode())}, "
+                           f"{len(resp.answer)} answer rrsets", ms)
     except Exception as e:  # noqa: BLE001
         return CheckResult("forwarding", target.name, "FAIL", repr(e))
 

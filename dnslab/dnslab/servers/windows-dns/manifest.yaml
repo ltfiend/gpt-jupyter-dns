@@ -1,0 +1,46 @@
+# windows-dns — Windows Server 2025 DNS Server role on EC2 (tier 2).
+#
+# Capability verdict (researched 2026-09, see README.md for citations):
+# the Windows DNS Server role has NO DNS-over-TLS (port 853) listener.
+# Encrypted-DNS *client* support (DoH/DoT) lives in the Windows stub
+# resolver, and the 2026-02/2026-06 Server 2025 updates added a server-side
+# DoH (port 443) listener — but Set-DnsServerEncryptionProtocol still has
+# no DoT knob, so dot_listener stays false and DoT checks SKIP honestly.
+name: windows-dns
+tier: 2
+provider: ec2
+
+# SSM public parameter — region-portable, always the current 2025 AMI.
+ami_ssm_parameter: /aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base
+instance_type: t3.medium
+rdp: false  # set true to also open tcp/3389 (caller /32 only) for debugging
+
+capabilities:
+  roles: [forwarder, recursive]
+  do53_listener: true
+  dot_listener: false          # no native 853 listener in the DNS Server role
+  dot_upstream_forwarding: false  # forwarders are plain Do53; DoT client is stub-resolver-only
+  dot_listener_via_proxy: false   # a stunnel 853->53 sidecar profile is documented, not implemented
+  notes: >-
+    Windows DNS Server role has no DoT listener; DoT client support lives in
+    the Windows stub resolver, not the server role. Server 2025 (2026 updates)
+    added a DoH listener on 443 (Set-DnsServerEncryptionProtocol -EnableDoh),
+    still no DoT. ZTDNS is client-side enforcement. Citations in README.md.
+
+default_profile: forwarder-do53
+profiles:
+  forwarder-do53:
+    template: profiles/forwarder-do53.ps1.j2
+    # config_path is unused by the ec2 provider (configuration arrives as
+    # EC2 user-data); descriptive value to satisfy the schema. The provider
+    # also drops the rendered script in the instance's state dir.
+    config_path: /dnslab/userdata.ps1
+    listeners: [do53]
+    # profile extra key: upstream forwarders for the DNS Server role.
+    # The lab-auth pair is unreachable from EC2, so default to public
+    # resolvers; override per start: dnslab.start('windows-dns',
+    # forwarders='9.9.9.9 149.112.112.112')
+    forwarders: "1.1.1.1 1.0.0.1"
+
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: ".", qtype: "SOA"}
