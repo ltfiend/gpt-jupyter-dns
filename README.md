@@ -80,7 +80,10 @@ Optional environment variables (set in `compose.yaml`):
 ## CI/CD
 
 GitHub Actions (`.github/workflows/build.yml`) lints, builds, tests, scans,
-and publishes the image:
+and publishes the image. It runs on a **self-hosted runner** labelled
+`[self-hosted, Linux, X64]` with Docker available — see
+[`docs/self-hosted-runner.md`](docs/self-hosted-runner.md) for registering
+one and for running a single runner box across multiple repos.
 
 | Trigger | What runs |
 |---------|-----------|

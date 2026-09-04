@@ -36,7 +36,7 @@ env:
 jobs:
   lint:
     name: Lint Dockerfile
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
       - name: hadolint
@@ -47,7 +47,7 @@ jobs:
 
   build:
     name: Build, smoke-test, scan & publish
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: lint
     permissions:
       contents: read
@@ -56,18 +56,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # ---- Build once, load into the local daemon for test + scan ----
-      - name: Build image (load for testing)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: ${{ env.CI_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # Plain `docker build` on the self-hosted box: the daemon's persistent
+      # layer cache makes rebuilds fast without shipping cache to/from GitHub.
+      # (No buildx needed — this runner only has the classic builder.)
+      - name: Build image
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            --tag "${{ env.CI_TAG }}" \
+            --file Dockerfile \
+            .
 
       - name: Smoke test (tools + Python libs)
         run: |
@@ -132,28 +129,43 @@ jobs:
 
       - name: Compute image tags
         id: meta
+        if: github.event_name != 'pull_request'
         uses: docker/metadata-action@v5
         with:
           images: |
             ${{ env.GHCR_IMAGE }}
             ${{ env.PRIVATE_IMAGE }}
+          # Skip the private registry's tags when its creds are absent, so we
+          # don't tag/push images we can't authenticate to.
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
             type=schedule,pattern={{date 'YYYYMMDD'}}
 
-      # Cache is warm from the build-and-load above, so this is a fast re-export.
-      - name: Push image
+      # Re-tag the already-built CI image and push. Tags for registries we
+      # didn't log in to are skipped individually (a failed push there would
+      # otherwise fail the job).
+      - name: Tag & push image
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          PRIVREG_ENABLED: ${{ steps.privreg.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          echo "$TAGS" | while read -r tag; do
+            [ -z "$tag" ] && continue
+            case "$tag" in
+              "${PRIVATE_IMAGE}:"*)
+                if [ "$PRIVREG_ENABLED" != "true" ]; then
+                  echo "::notice::skipping $tag (no private-registry creds)"
+                  continue
+                fi
+                ;;
+            esac
+            echo "Pushing $tag"
+            docker tag "${CI_TAG}" "$tag"
+            docker push "$tag"
+          done
