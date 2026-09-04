@@ -15,7 +15,7 @@ import json
 import os
 from pathlib import Path
 
-PKG_DIR = Path(__file__).resolve().parent  # .../dnslab/dnslab
+PKG_DIR = Path(__file__).resolve().parent  # <repo>/dnslab (the package itself)
 SERVERS_DIR = PKG_DIR / "servers"
 
 
@@ -27,7 +27,7 @@ def workspace_root() -> Path:
     if Path("/workspace").is_dir():
         return Path("/workspace")
     # host-side fallback: the repo's workspace/ next to the dnslab package
-    repo = PKG_DIR.parent.parent  # .../gpt-jupyter-dns
+    repo = PKG_DIR.parent  # .../gpt-jupyter-dns
     return repo / "workspace"
 
 

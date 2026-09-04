@@ -21,3 +21,4 @@ PROMPTS.md
 __pycache__/
 *.pyc
 !data/dot-real-upstream-lab.ipynb
+*.egg-info/

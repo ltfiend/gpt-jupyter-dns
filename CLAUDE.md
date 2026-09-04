@@ -39,9 +39,9 @@ The container mounts this repo's `workspace/` to `/workspace` inside the contain
 
 ## dnslab (multi-server DoT test lab)
 
-`dnslab/dnslab/` is bind-mounted to `/opt/dnslab/dnslab` (on `PYTHONPATH`) so notebooks can start, target, and functionally test DNS servers across three tiers: local Docker containers (opensource), free/license-included AWS AMIs via boto3, and paid marketplace AMIs.
+`dnslab/` is bind-mounted to `/opt/dnslab/dnslab` (on `PYTHONPATH`) so notebooks can start, target, and functionally test DNS servers across three tiers: local Docker containers (opensource), free/license-included AWS AMIs via boto3, and paid marketplace AMIs.
 
-- Server modules live in `dnslab/dnslab/servers/<name>/` — a `manifest.yaml` (provider, pinned image, **verified** capability flags, profiles), jinja2 config templates under `profiles/`, and a README. There is no central registry file; the directory is auto-discovered, so per-server work never conflicts.
+- Server modules live in `dnslab/servers/<name>/` — a `manifest.yaml` (provider, pinned image, **verified** capability flags, profiles), jinja2 config templates under `profiles/`, and a README. There is no central registry file; the directory is auto-discovered, so per-server work never conflicts.
 - Notebook API: `dnslab.start('unbound', profile='forwarder-dot')`, `dnslab.targets()`, `dnslab.checks.run_matrix(...)`, `dnslab.stop()/nuke()`. Main notebook: `data/dot-forwarding-lab.ipynb`.
 - Forwarding-over-DoT is proven via the framework-owned `lab-auth` upstream pair: the DoT upstream listens only on 853/TLS and serves `transport-marker.lab.test TXT "dot"` (the Do53 one serves `"do53"`), so answer content identifies the transport used upstream.
 - Lab CA + per-instance certs are generated into `workspace/certs/dnslab/` (throwaway; keys deliberately world-readable).

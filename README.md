@@ -108,7 +108,7 @@ Notes:
   `unbound.dnslab.test`; certificates are issued by a throwaway lab CA in
   `workspace/certs/dnslab/` (`dnslab.ca_file()`).
 - Config templates are editable on the host under
-  `dnslab/dnslab/servers/<name>/profiles/` — re-run `dnslab.start()` to
+  `dnslab/servers/<name>/profiles/` — re-run `dnslab.start()` to
   apply, no image rebuild needed.
 - The EC2 tier launches instances tagged `dnslab=1` with a 4h expiry tag
   and a security group scoped to your public IP; `dnslab.nuke()` removes
