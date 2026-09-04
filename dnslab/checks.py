@@ -43,8 +43,16 @@ def _txt_values(resp) -> list[str]:
     return vals
 
 
-def query_do53(target: Target, qname: str = LAB_ZONE_SOA, qtype: str = "SOA") -> CheckResult:
+def _basic_probe(target: Target) -> tuple[str, str]:
+    """Docker-tier targets answer the lab zone; anything else (ec2/external)
+    can't reach the lab upstreams, so probe with a public name instead."""
+    return (LAB_ZONE_SOA, "SOA") if target.provider == "docker" else PUBLIC_PROBE
+
+
+def query_do53(target: Target, qname: str | None = None, qtype: str | None = None) -> CheckResult:
     """The server answers a plain UDP/53 query."""
+    if qname is None or qtype is None:
+        qname, qtype = _basic_probe(target)
     if target.port_do53 is None:
         return CheckResult("do53-query", target.name, "SKIP", "no Do53 listener in this profile")
     try:
@@ -57,12 +65,14 @@ def query_do53(target: Target, qname: str = LAB_ZONE_SOA, qtype: str = "SOA") ->
         return CheckResult("do53-query", target.name, "FAIL", repr(e))
 
 
-def query_dot(target: Target, qname: str = LAB_ZONE_SOA, qtype: str = "SOA") -> CheckResult:
+def query_dot(target: Target, qname: str | None = None, qtype: str | None = None) -> CheckResult:
     """The server answers over TLS on 853 with a cert the lab CA validates.
 
     Primary path is dnspython dns.query.tls; kdig +tls-ca cross-checks when
     available so a dnspython quirk can't hide a broken server (or vice versa).
     """
+    if qname is None or qtype is None:
+        qname, qtype = _basic_probe(target)
     if target.port_dot is None:
         reason = "DoT listener unsupported" if not target.capabilities.dot_listener \
             else "no DoT listener in this profile"
