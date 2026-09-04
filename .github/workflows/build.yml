@@ -61,7 +61,7 @@ jobs:
 
       # ---- Build once, load into the local daemon for test + scan ----
       - name: Build image (load for testing)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -149,7 +149,7 @@ jobs:
       # Cache is warm from the build-and-load above, so this is a fast re-export.
       - name: Push image
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
