@@ -1,0 +1,26 @@
+# hadolint config for the gpt-jupyter-dns Dockerfile.
+#
+# This image intentionally installs "latest" for OS and pip packages so
+# rebuilds pick up security fixes, and it fetches a few tools via curl|tar
+# from upstream release URLs. Those patterns are deliberate, so the
+# corresponding rules are relaxed rather than worked around.
+failure-threshold: warning
+
+ignored:
+  # DL3008: pin apt versions — we want latest security-patched packages.
+  - DL3008
+  # DL3013: pin pip versions — pip installs are intentionally unpinned so
+  #         a rebuild refreshes JupyterLab/dnspython/etc. to current.
+  - DL3013
+  # DL4006: SHELL -o pipefail before curl|... — base image default shell is
+  #         sh; the curl|tar steps are guarded by `set -e`-equivalent -f on
+  #         curl and fail closed on a bad download.
+  - DL4006
+  # DL3059: multiple consecutive RUNs — layers are grouped for readability
+  #         and cache locality, not squashed.
+  - DL3059
+
+trustedRegistries:
+  - docker.io
+  - registry.devries.tv
+  - ghcr.io

@@ -1,7 +1,7 @@
 # dns-notebook/Dockerfile
 
 # ── builder stage: compile flamethrower and dnspyre ──
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates git \
@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Go from official tarball (Debian's version is too old for dnstrace deps)
-RUN curl -fsSL https://go.dev/dl/go1.24.4.linux-amd64.tar.gz | tar -C /usr/local -xz
+RUN curl -fsSL https://go.dev/dl/go1.27.1.linux-amd64.tar.gz | tar -C /usr/local -xz
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Build flamethrower and strip symbols to shrink the binary
@@ -24,12 +24,12 @@ RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrowe
 
 # Build dnspyre (actively maintained dnstrace successor) from source.
 # CGO_ENABLED=0 + -s -w strips the resulting binary (~40MB → ~15MB).
-RUN git clone --branch v3.10.2 --depth 1 https://github.com/Tantalor93/dnspyre.git /tmp/dnspyre \
+RUN git clone --branch v3.12.0 --depth 1 https://github.com/Tantalor93/dnspyre.git /tmp/dnspyre \
   && cd /tmp/dnspyre \
   && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/dnspyre .
 
 # ── runtime stage ──
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -82,7 +82,7 @@ RUN git clone --depth 1 https://github.com/cleanbrowsing/dnsperftest.git /opt/dn
   && rm -rf /opt/dnsperftest/.git
 
 # Install dot-cert-tester (DoT certificate testing tool)
-RUN curl -fsSL https://raw.githubusercontent.com/ltfiend/dns-scripts/main/dot-cert-tester.py \
+RUN curl -fsSL https://raw.githubusercontent.com/ltfiend/dns-scripts/refs/heads/main/dot-cert-tester.py \
     -o /opt/dot-cert-tester.py \
   && chmod +x /opt/dot-cert-tester.py \
   && ln -s /opt/dot-cert-tester.py /usr/bin/dot-cert-tester
@@ -106,8 +106,9 @@ RUN pip install --no-cache-dir --no-compile \
         pandas \
         rich \
         tabulate \
+        ipynbname \
         "nbconvert[webpdf]" \
-  && find /usr/local/lib/python3.12 -depth \
+  && find /usr/local/lib/python3.13 -depth \
         \( -type d \( -name tests -o -name test -o -name __pycache__ \) \
         -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
         -exec rm -rf {} + \

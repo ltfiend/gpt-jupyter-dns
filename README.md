@@ -76,3 +76,36 @@ Optional environment variables (set in `compose.yaml`):
 | `GIT_URL` | Clone/pull a notebook repo on startup |
 | `S3_URI` | Sync notebooks from S3 on startup |
 | `EXTRA_PIP` | Install additional pip packages at container start |
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/build.yml`) lints, builds, tests, scans,
+and publishes the image:
+
+| Trigger | What runs |
+|---------|-----------|
+| Pull request | hadolint → build → smoke test → Trivy scan (no push) |
+| Push to `main` | the above, then push `:latest` + `:sha-<short>` |
+| Tag `v*` | the above, then push semver tags (`1.2.3`, `1.2`) |
+| Weekly schedule | rebuild for base-image/pip security fixes, re-scan, republish |
+| Manual dispatch | same as a `main` build |
+
+**Publish targets:**
+- **GHCR** (`ghcr.io/<owner>/gpt-jupyter-dns`) — always, via the built-in `GITHUB_TOKEN`.
+- **Private registry** (`registry.devries.tv/gpt-jupyter-dns`) — only when these
+  repository secrets are set:
+
+  | Secret | Purpose |
+  |--------|---------|
+  | `REGISTRY_USERNAME` | login for `registry.devries.tv` |
+  | `REGISTRY_PASSWORD` | password/token for `registry.devries.tv` |
+
+  With the secrets unset, the private push is skipped (a workflow notice is
+  logged) and GHCR still publishes.
+
+Trivy results (CRITICAL/HIGH, fixable) upload to the repo's **Security → Code
+scanning** tab. The scan is report-only — it does not block the build, since
+DNS base-image CVEs are often unfixable upstream.
+
+The smoke test (`test/smoke-test.sh`) asserts every CLI tool and Python
+library the notebooks rely on is present in the built image.

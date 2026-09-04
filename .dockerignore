@@ -1,0 +1,32 @@
+# Keep the build context small: none of these are needed to build the image.
+# (The Dockerfile installs notebooks at runtime via GIT_URL/S3, not COPY.)
+
+# Saved image tarballs (hundreds of MB)
+*.tar
+*.tar.gz
+
+# Notebook data + runtime workspace (mounted at run time, not built in)
+data/
+workspace/
+**/.ipynb_checkpoints/
+
+# Git + CI + editor metadata
+.git/
+.github/
+.gitignore
+.claude/
+.hadolint.yaml
+
+# Docs and scratch
+README.md
+PROMPTS.md
+CLAUDE.md
+
+# Local env / secrets (defensive — should never be in context)
+.env
+*.pem
+*.key
+credentials*
+
+# Test scripts are mounted into the container in CI, not built in
+test/

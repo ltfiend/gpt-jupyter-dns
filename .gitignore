@@ -12,5 +12,6 @@ credentials*
 
 # Build artifacts
 *.tar.gz
+*.tar
 
 PROMPTS.md

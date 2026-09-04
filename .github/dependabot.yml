@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Keep the pinned action versions in workflows current (security patches).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+
+  # Watch the Dockerfile base image (python:X-slim) for new tags.
+  # Tool versions fetched via curl/git in RUN steps are not tracked by
+  # Dependabot — the weekly scheduled rebuild + Trivy scan covers drift there.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: docker
