@@ -657,3 +657,45 @@ it still seems to be restarting. At least in my execution of real-upstream-lab.i
 
 ---
 
+## 2026-09-04 02:15:07
+
+<task-notification>
+<task-id>bylukooxn</task-id>
+<tool-use-id>toolu_01JYGn9J6FueuHhQECaTcJaT</tool-use-id>
+<output-file>/tmp/claude-1000/-home-peter-Git-gpt-jupyter-dns/2ad22aa3-0503-4005-b2d0-a3a79832265c/tasks/bylukooxn.output</output-file>
+<status>completed</status>
+<summary>Background command "Poll windows readiness then verify reuse + checks" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+## 2026-09-04 02:39:59
+
+Starting with Windows 11 Build 25158 (and newer preview/enterprise tracks), Microsoft introduced native client-side support for DNS-over-TLS (DoT).  Please see if you can integrate that into our windows test setup (currently we're just forwarding over 53), let me know if you need more information.  Also try to make sure the windows DNS server forwards to the configured upstreams.  It looks like it's hard coded for 1.1.1.1 and 1.0.0.1.  If that can't be changed I can manually configure in the environment, it won't change often.
+
+---
+
+## 2026-09-04 02:51:20
+
+<task-notification>
+<task-id>bsdw7pf92</task-id>
+<tool-use-id>toolu_017qUvbs5bNydheMsPgsryPr</tool-use-id>
+<output-file>/tmp/claude-1000/-home-peter-Git-gpt-jupyter-dns/2ad22aa3-0503-4005-b2d0-a3a79832265c/tasks/bsdw7pf92.output</output-file>
+<status>completed</status>
+<summary>Background command "Poll SSM online and run netsh DoT validation on Server 2025" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+## 2026-09-04 02:57:23
+
+<task-notification>
+<task-id>b3fuhdprd</task-id>
+<tool-use-id>toolu_01G7KEqJBVzbdVvVosd2AEDo</tool-use-id>
+<output-file>/tmp/claude-1000/-home-peter-Git-gpt-jupyter-dns/2ad22aa3-0503-4005-b2d0-a3a79832265c/tasks/b3fuhdprd.output</output-file>
+<status>completed</status>
+<summary>Background command "Launch windows-client-dot via framework and verify on-box" completed (exit code 0)</summary>
+</task-notification>
+
+---
+

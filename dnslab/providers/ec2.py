@@ -355,13 +355,31 @@ class Ec2Provider(Provider):
         # up). Only config drift or force=True reach the replace path below.
         if not force:
             match = None
-            for aws_inst in self._describe(states=("pending", "running")):
+            match_state = None
+            match_id = None
+            # include stopped/stopping so a paused instance is RESUMED, not
+            # relaunched (stop→resume is the intended cost-saving workflow).
+            for aws_inst in self._describe(
+                    states=("pending", "running", "stopping", "stopped")):
                 tags = _tags_dict(aws_inst.get("Tags"))
                 if tags.get(f"{TAG}-instance") == instance_name:
                     match = tags
+                    match_state = aws_inst["State"]["Name"]
+                    match_id = aws_inst["InstanceId"]
                     break
             if match is not None and match.get(f"{TAG}-profile") == profile.name \
                     and match.get(f"{TAG}-confhash") == confhash:
+                if match_state in ("stopping", "stopped"):
+                    # resume the paused instance (public IP will change unless
+                    # an EIP is attached; discover() re-reads it below)
+                    if match_state == "stopping":
+                        ec2.get_waiter("instance_stopped").wait(
+                            InstanceIds=[match_id],
+                            WaiterConfig={"Delay": 10, "MaxAttempts": 60})
+                    ec2.start_instances(InstanceIds=[match_id])
+                    ec2.get_waiter("instance_running").wait(
+                        InstanceIds=[match_id],
+                        WaiterConfig={"Delay": 5, "MaxAttempts": 60})
                 reused = next((i for i in self.discover()
                                if i.name == instance_name), None)
                 if reused is not None:
@@ -372,18 +390,24 @@ class Ec2Provider(Provider):
                     if sg_id:
                         self._authorize_current_ip(ec2, sg_id,
                                                    bool(spec.raw.get("rdp")))
+                    resumed = match_state in ("stopping", "stopped")
+                    is_client = not spec.capabilities.do53_listener \
+                        and not spec.capabilities.dot_listener
                     if wait:
-                        try:
-                            self._wait_healthy(spec, reused, timeout)
-                        except TimeoutError as e:
-                            raise TimeoutError(
-                                f"{instance_name}: existing instance {reused.id} "
-                                f"({reused.status}) is not answering yet — it was "
-                                "LEFT RUNNING, not relaunched. Re-run start() to "
-                                "keep waiting (Windows first boot takes ~5-10 min), "
-                                "or pass force=True to recreate it."
-                            ) from e
-                    reused.status = "reused " + reused.status
+                        if is_client:
+                            self._wait_ssm_online(reused.id, timeout)
+                        else:
+                            try:
+                                self._wait_healthy(spec, reused, timeout)
+                            except TimeoutError as e:
+                                raise TimeoutError(
+                                    f"{instance_name}: existing instance {reused.id} "
+                                    f"({reused.status}) is not answering yet — it was "
+                                    "LEFT RUNNING, not relaunched. Re-run start() to "
+                                    "keep waiting (Windows first boot takes ~5-10 min), "
+                                    "or pass force=True to recreate it."
+                                ) from e
+                    reused.status = ("resumed " if resumed else "reused ") + reused.status
                     self._remember(reused)
                     return reused
             # config drift / different profile → fall through and replace
