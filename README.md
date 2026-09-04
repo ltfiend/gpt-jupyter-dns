@@ -82,7 +82,14 @@ Optional environment variables (set in `compose.yaml`):
 The `dnslab/` package (bind-mounted at `/opt/dnslab/dnslab`, already on
 `PYTHONPATH`) lets notebooks launch, target, and functionally test DNS
 servers — locally as Docker containers or in AWS via boto3 — with a focus
-on DNS-over-TLS forwarding. See `data/dot-forwarding-lab.ipynb`.
+on DNS-over-TLS forwarding. Two notebooks:
+
+- `data/dot-forwarding-lab.ipynb` — self-contained transport proof against
+  the lab-auth upstream pair (marker TXT proves TLS was used upstream).
+- `data/dot-real-upstream-lab.ipynb` — servers forward everything over TLS
+  to **your real upstreams** (`global-forwarder-dot` profiles, system CA,
+  DNSSEC validation on); config areas for upstreams and query names; the
+  report shows rcode, header flags (AD), DO/EDNS, EDE, and RRSIG presence.
 
 ```python
 import dnslab

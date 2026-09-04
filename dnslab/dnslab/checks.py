@@ -174,6 +174,89 @@ def check_dot_upstream_marker(target: Target) -> CheckResult:
         return CheckResult("dot-upstream", target.name, "FAIL", repr(e))
 
 
+def query_report(target: Target, qname: str, qtype: str = "A", *,
+                 dot: bool = True, want_dnssec: bool = True,
+                 timeout: float = 10) -> dict:
+    """One query against one target, reported in full detail.
+
+    Success is rcode NOERROR only — answers are not matched. The row makes
+    header flags and EDNS visible so DNSSEC behavior can be read off
+    directly: AD in `flags` means the responding path validated, `do`
+    echoes the DO bit, `ede` carries Extended DNS Errors (e.g. validation
+    failure reasons), `rrsig` says whether signatures came back.
+    """
+    import dns.edns
+    import dns.flags
+    import dns.rcode
+
+    transport = "dot" if dot else "do53"
+    row = {"target": target.name, "qname": qname, "qtype": qtype,
+           "transport": transport, "status": "SKIP", "rcode": "",
+           "flags": "", "do": None, "edns_payload": None, "ede": "",
+           "rrsig": None, "answers": None, "latency_ms": None}
+    if (dot and target.port_dot is None) or (not dot and target.port_do53 is None):
+        row["ede"] = f"no {transport} listener"
+        return row
+
+    q = dns.message.make_query(qname, qtype, use_edns=0, payload=1232,
+                               want_dnssec=want_dnssec)
+    t0 = time.monotonic()
+    try:
+        if dot:
+            sslctx = ssl.create_default_context(cafile=target.ca_file)
+            resp = dns.query.tls(q, target.address, port=target.port_dot,
+                                 timeout=timeout, ssl_context=sslctx,
+                                 server_hostname=target.tls_hostname)
+        else:
+            resp = dns.query.udp_with_fallback(
+                q, target.address, port=target.port_do53, timeout=timeout)[0]
+    except Exception as e:  # noqa: BLE001 — transport failure is a FAIL row
+        row.update(status="FAIL", ede=repr(e),
+                   latency_ms=round((time.monotonic() - t0) * 1000, 1))
+        return row
+
+    row["latency_ms"] = round((time.monotonic() - t0) * 1000, 1)
+    row["rcode"] = dns.rcode.to_text(resp.rcode())
+    row["status"] = "PASS" if resp.rcode() == dns.rcode.NOERROR else "FAIL"
+    row["flags"] = dns.flags.to_text(resp.flags)
+    if resp.edns >= 0:
+        row["do"] = bool(resp.ednsflags & dns.flags.DO)
+        row["edns_payload"] = resp.payload
+        edes = []
+        for opt in resp.options:
+            if isinstance(opt, dns.edns.EDEOption):
+                try:
+                    name = dns.edns.EDECode(opt.code).name
+                except ValueError:
+                    name = str(opt.code)
+                edes.append(f"{int(opt.code)} {name}" + (f": {opt.text}" if opt.text else ""))
+        row["ede"] = "; ".join(edes)
+    row["rrsig"] = any(rr.rdtype == dns.rdatatype.RRSIG for rr in resp.answer)
+    row["answers"] = sum(len(rr) for rr in resp.answer)
+    return row
+
+
+def run_query_matrix(targets: list[Target], queries: list,
+                     transports: tuple[str, ...] = ("do53", "dot"),
+                     want_dnssec: bool = True):
+    """Query every name against every target over every transport.
+
+    `queries` items are "name" or ("name", "TYPE"). Returns a DataFrame
+    with one row per (target, name, transport) carrying full flag/EDNS
+    detail; PASS means the response was NOERROR (answers are not matched).
+    """
+    import pandas as pd
+
+    rows = []
+    for t in targets:
+        for item in queries:
+            qname, qtype = item if isinstance(item, (tuple, list)) else (item, "A")
+            for tr in transports:
+                rows.append(query_report(t, qname, qtype, dot=(tr == "dot"),
+                                         want_dnssec=want_dnssec))
+    return pd.DataFrame(rows)
+
+
 ALL_CHECKS = (query_do53, query_dot, check_cert, check_forwarding, check_dot_upstream_marker)
 
 

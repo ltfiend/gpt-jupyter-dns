@@ -1,0 +1,41 @@
+# dnslab unbound: GLOBAL forwarder over DoT ({{ instance_name }})
+# Forwards EVERYTHING (zone ".") over TLS to real upstream resolvers,
+# validating their certs against the system CA bundle (not the lab CA).
+# DNSSEC validation is ON (auto-trust-anchor primed at image build) so the
+# AD flag in answers reflects this server's own validation.
+server:
+    verbosity: 1
+    username: ""
+    chroot: ""
+    directory: ""
+    pidfile: ""
+    do-daemonize: no
+    do-ip6: no
+    hide-version: yes
+{% if listen_do53 %}
+    interface: 0.0.0.0@{{ port_do53 }}
+{% endif %}
+{% if listen_dot %}
+    interface: 0.0.0.0@{{ port_dot }}
+    tls-port: {{ port_dot }}
+    tls-service-key: "{{ tls_key_path }}"
+    tls-service-pem: "{{ tls_cert_path }}"
+{% endif %}
+    access-control: 0.0.0.0/0 allow
+    # system CA bundle — real upstreams present public certs
+    tls-cert-bundle: "/etc/ssl/certs/ca-certificates.crt"
+    module-config: "validator iterator"
+    auto-trust-anchor-file: "/etc/unbound/root.key"
+    # deterministic healthcheck answer that needs no upstream
+    local-zone: "health.dnslab.test." static
+    local-data: "health.dnslab.test. A 127.0.0.1"
+
+remote-control:
+    control-enable: no
+
+forward-zone:
+    name: "."
+    forward-tls-upstream: yes
+{% for up in upstreams %}
+    forward-addr: {{ up.ip }}@{{ up.port | default(853) }}#{{ up.tls_hostname }}
+{% endfor %}

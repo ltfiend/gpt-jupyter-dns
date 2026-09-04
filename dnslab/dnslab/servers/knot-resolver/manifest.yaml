@@ -35,5 +35,15 @@ profiles:
     config_path: /dnslab/config/kresd.conf
     listeners: [do53, dot]
     requires: [dot_upstream_forwarding]
+  # Forwards EVERYTHING over TLS to real upstreams (system CA store, DNSSEC
+  # validation on). Override upstreams per run via dnslab.start(...).
+  global-forwarder-dot:
+    template: profiles/global-forwarder-dot.conf.j2
+    config_path: /dnslab/config/kresd.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+    upstreams:
+      - {ip: 1.1.1.1, port: 853, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, port: 853, tls_hostname: dns.quad9.net}
 ports: {do53: 53, dot: 853}
 healthcheck: {qname: "lab.test", qtype: "SOA"}

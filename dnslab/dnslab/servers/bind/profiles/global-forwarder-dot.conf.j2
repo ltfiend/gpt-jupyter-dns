@@ -1,0 +1,45 @@
+// dnslab bind — GLOBAL forwarder over DoT ({{ instance_name }})
+// Forwards everything (options-level forwarders, forward only) over TLS to
+// real upstream resolvers, validating their certs against the system CA
+// bundle. DNSSEC validation is ON (built-in root trust anchor), so AD in
+// answers reflects this server's own validation.
+
+{% if listen_dot %}
+tls dnslab-tls {
+    key-file "{{ tls_key_path }}";
+    cert-file "{{ tls_cert_path }}";
+};
+{% endif %}
+
+{% for up in upstreams %}
+tls upstream{{ loop.index0 }} {
+    ca-file "/etc/ssl/certs/ca-certificates.crt";
+    remote-hostname "{{ up.tls_hostname }}";
+};
+{% endfor %}
+
+options {
+    directory "/tmp";               // writable at any uid; also exists on lint hosts
+    pid-file none;
+    recursion yes;
+    allow-query { any; };           // lab network only — never expose like this
+    allow-recursion { any; };
+    dnssec-validation auto;         // built-in root TA; sets AD on validated answers
+{% if listen_do53 %}
+    listen-on port {{ port_do53 }} { any; };
+{% else %}
+    listen-on { none; };
+{% endif %}
+{% if listen_dot %}
+    listen-on port {{ port_dot }} tls dnslab-tls { any; };
+{% endif %}
+    listen-on-v6 { none; };
+    forwarders {
+{% for up in upstreams %}
+        {{ up.ip }} port {{ up.port | default(853) }} tls upstream{{ loop.index0 }};
+{% endfor %}
+    };
+    forward only;
+};
+
+controls { };                       // no rndc

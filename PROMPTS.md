@@ -591,3 +591,27 @@ The claim holds, **with a 2026 twist**: the Windows DNS Server role still has **
 
 ---
 
+## 2026-09-04 00:27:18
+
+I'm getting an AttributeError: module 'dnslab' has no attribute 'registry'
+
+---
+
+## 2026-09-04 00:33:18
+
+the old dnslab is superseded, uninstall it
+
+---
+
+## 2026-09-04 00:42:20
+
+rebuild the container and run the lab notebook end to end, it still seems to be giving the wrong
+
+---
+
+## 2026-09-04 00:48:47
+
+Great, this is looking good but I want a slightly different use case (keep this one as well).  Dont' start the lab upstreams, instead I will provide a set of real upstreams that should be reachable from the lab.   The notebook should test that the servers under test can be queried and those queried forwarded over TLS to the upstreams.   Also provide an area for me to provide the names that should be queried.   A NOERROR response should be sufficent to determine it's ok (we don't need to match answers) but I do want you to make the flags and EDNS options visable in the output.   Specifically DNSSEC validation.
+
+---
+

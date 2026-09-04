@@ -31,6 +31,18 @@ profiles:
     config_path: /dnslab/config/unbound.conf
     listeners: [do53, dot]
     requires: [dot_upstream_forwarding]
+  # Forwards EVERYTHING over TLS to real upstreams (system CA, DNSSEC
+  # validation on). Override the upstream set per run:
+  #   dnslab.start('unbound', profile='global-forwarder-dot',
+  #                upstreams=[{'ip': ..., 'port': 853, 'tls_hostname': ...}])
+  global-forwarder-dot:
+    template: profiles/global-forwarder-dot.conf.j2
+    config_path: /dnslab/config/unbound.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+    upstreams:
+      - {ip: 1.1.1.1, port: 853, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, port: 853, tls_hostname: dns.quad9.net}
 ports: {do53: 53, dot: 853}
 # Answered from local-data in every profile, so health never depends on
 # upstream reachability or real recursion (lab.test would be wrong for the
