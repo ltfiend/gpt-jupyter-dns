@@ -251,6 +251,14 @@ $ErrorActionPreference='Continue'
 $names = @({names})
 $block = ${block}
 Write-Output "OS: $((Get-CimInstance Win32_OperatingSystem).Caption) $([Environment]::OSVersion.Version)"
+# Ensure client DoT config is present (idempotent) so this report does not
+# depend on user-data timing — netsh add is a no-op if already set.
+netsh dns add global dot=yes | Out-Null
+{ensure_encryption}
+$servers = @({server_ips})
+Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object {{ $_.ServerAddresses }} | ForEach-Object {{
+    Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses $servers -ErrorAction SilentlyContinue
+}}
 Write-Output "--- netsh dns show encryption ---"
 netsh dns show encryption
 if ($block) {{
@@ -293,14 +301,34 @@ def windows_dot_client_report(name: str = "windows-client-dot",
     """
     from .providers import get_provider
 
+    from .registry import get
+
     prov = get_provider("ec2")
     inst = next((i for i in prov.discover()
                  if name in (i.name, i.server)), None)
     if inst is None:
         raise RuntimeError(f"{name!r} is not running — dnslab.start({name!r}) first")
+
+    # upstreams the instance was configured with, so the report can (re)apply
+    # the netsh DoT config itself rather than trusting user-data timing
+    spec = get(inst.server)
+    prof = spec.profiles.get(inst.profile)
+    upstreams = (prof.extra.get("upstreams") if prof else None) or []
+    ensure = "\n".join(
+        f"netsh dns add encryption server={u['ip']} dothost={u['tls_hostname']} "
+        f"autoupgrade=yes | Out-Null"
+        for u in upstreams if u.get("ip") and u.get("tls_hostname")
+    )
+    server_ips = ",".join(f"'{u['ip']}'" for u in upstreams if u.get("ip"))
+    if not server_ips:
+        raise RuntimeError(
+            f"{name!r} profile {inst.profile!r} has no upstreams to configure DoT with"
+        )
     ps = _DOT_CLIENT_PS.format(
         names=",".join(f"'{n}'" for n in names),
         block="true" if block_plaintext else "false",
+        ensure_encryption=ensure,
+        server_ips=server_ips,
     )
     res = prov.run_command(inst.id, ps, timeout=timeout)
     out = res.get("stdout", "")
