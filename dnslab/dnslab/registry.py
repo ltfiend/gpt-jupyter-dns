@@ -75,20 +75,35 @@ def load_manifest(path: Path) -> ServerSpec:
     )
 
 
-def discover(servers_dir: Path | None = None) -> dict[str, ServerSpec]:
+def discover(servers_dir: Path | None = None, *, strict: bool = False) -> dict[str, ServerSpec]:
+    """Load every servers/*/manifest.yaml.
+
+    By default a broken manifest is skipped with a warning so one
+    module-in-progress can't take down start/stop/target for every other
+    server. selfcheck passes strict=True to surface the error instead.
+    """
+    import warnings
+
     root = servers_dir or SERVERS_DIR
     specs: dict[str, ServerSpec] = {}
     if not root.is_dir():
         return specs
     for manifest in sorted(root.glob("*/manifest.yaml")):
-        spec = load_manifest(manifest)
+        try:
+            spec = load_manifest(manifest)
+        except Exception as e:  # noqa: BLE001 — yaml/schema errors alike
+            if strict:
+                raise
+            warnings.warn(f"skipping broken manifest {manifest}: {e}", stacklevel=2)
+            continue
         specs[spec.name] = spec
     return specs
 
 
 def get(name: str) -> ServerSpec:
+    """Load one server's manifest directly (unaffected by broken siblings)."""
+    manifest = SERVERS_DIR / name / "manifest.yaml"
+    if manifest.is_file():
+        return load_manifest(manifest)
     specs = discover()
-    try:
-        return specs[name]
-    except KeyError:
-        raise KeyError(f"unknown server {name!r}; available: {sorted(specs)}") from None
+    raise KeyError(f"unknown server {name!r}; available: {sorted(specs)}")

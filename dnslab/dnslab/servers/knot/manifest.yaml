@@ -1,0 +1,41 @@
+# Knot DNS — authoritative server under test.
+#
+# Single instance serving its own copy of lab.test, mirroring the lab-auth
+# transport-marker convention: the auth-do53 profile's zone carries marker
+# TXT "do53", the auth-dot profile's zone carries "dot", so checks read the
+# same semantics off this target as off the framework upstream pair.
+#
+# DoT verified against the pinned image: Knot DNS 3.5.4 has a native TCP
+# TLS listener (server: listen-tls, introduced in 3.4) — no XDP involved.
+name: knot
+tier: 1
+provider: docker
+image: cznic/knot:v3.5.4     # knotd --version => "knotd, Knot DNS 3.5.4"
+# The image has no entrypoint (Cmd is just "bash"), so run knotd explicitly
+# in the foreground against the bind-mounted rendered config.
+command: ["knotd", "-c", "/dnslab/config/knot.conf"]
+lint: "knotc --config {config} conf-check"
+capabilities:
+  roles: [authoritative]
+  do53_listener: true
+  dot_listener: true            # native: server.listen-tls (Knot >= 3.4)
+  dot_upstream_forwarding: false  # authoritative only, never forwards
+  notes: "Knot DNS 3.5.4 authoritative; native DoT via server listen-tls."
+default_profile: auth-dot
+profiles:
+  auth-do53:
+    template: profiles/auth-do53.conf.j2
+    config_path: /dnslab/config/knot.conf
+    listeners: [do53]
+  auth-dot:
+    template: profiles/auth-dot.conf.j2
+    config_path: /dnslab/config/knot.conf
+    listeners: [dot]
+    requires: [dot_listener]
+  auth-both:
+    template: profiles/auth-both.conf.j2
+    config_path: /dnslab/config/knot.conf
+    listeners: [do53, dot]
+    requires: [dot_listener]
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

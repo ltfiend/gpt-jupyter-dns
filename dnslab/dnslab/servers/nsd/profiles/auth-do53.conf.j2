@@ -1,0 +1,17 @@
+# dnslab nsd server-under-test: Do53-ONLY authoritative ({{ instance_name }})
+server:
+    verbosity: 1
+    username: ""
+    zonesdir: "{{ zones_dir }}"
+    database: ""
+    interface: 0.0.0.0
+    port: {{ port_do53 }}
+    hide-version: yes
+    zonefiles-write: 0
+
+remote-control:
+    control-enable: no
+
+zone:
+    name: "lab.test"
+    zonefile: "lab.test.do53.zone"

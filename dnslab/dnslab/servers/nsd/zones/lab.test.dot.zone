@@ -1,0 +1,16 @@
+; dnslab test zone — nsd server-under-test copy served by the DoT-only
+; auth-dot profile. The transport-marker TXT identifies the transport.
+$ORIGIN lab.test.
+$TTL 60
+@                IN SOA ns.lab.test. admin.lab.test. (
+                     2026090301 ; serial
+                     3600       ; refresh
+                     900        ; retry
+                     604800     ; expire
+                     60 )       ; minimum
+@                IN NS   ns.lab.test.
+ns               IN A    192.0.2.53
+@                IN TXT  "dnslab lab.test zone (nsd dot)"
+transport-marker IN TXT  "dot"
+a                IN A    192.0.2.1
+aaaa             IN AAAA 2001:db8::1

@@ -1,0 +1,25 @@
+# dnslab nsd server-under-test: Do53 + DoT simultaneously ({{ instance_name }})
+# Realistic production shape: plain DNS on {{ port_do53 }} and TLS on
+# {{ port_dot }} at the same time. The default port ({{ port_do53 }}) covers
+# the first interface; the second interface's @{{ port_dot }} equals tls-port,
+# so NSD serves TLS there. One zone copy (do53 marker) backs both listeners.
+server:
+    verbosity: 1
+    username: ""
+    zonesdir: "{{ zones_dir }}"
+    database: ""
+    interface: 0.0.0.0
+    interface: 0.0.0.0@{{ port_dot }}
+    port: {{ port_do53 }}
+    hide-version: yes
+    zonefiles-write: 0
+    tls-service-key: "{{ tls_key_path }}"
+    tls-service-pem: "{{ tls_cert_path }}"
+    tls-port: {{ port_dot }}
+
+remote-control:
+    control-enable: no
+
+zone:
+    name: "lab.test"
+    zonefile: "lab.test.do53.zone"

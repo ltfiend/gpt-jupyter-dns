@@ -1,0 +1,44 @@
+# dnslab unbound: forwarder, DoT upstream ({{ instance_name }})
+# Listens Do53 + DoT; forwards lab.test to the DoT-ONLY lab-auth instance
+# over TLS 853, authenticating the upstream cert against the lab CA and the
+# #auth-name in forward-addr. That upstream has no port 53 at all, so any
+# lab.test answer (marker TXT "dot") proves TLS was used upstream.
+server:
+    verbosity: 1
+    username: ""
+    chroot: ""
+    directory: ""
+    pidfile: ""
+    do-daemonize: no
+    do-ip6: no
+    hide-version: yes
+{% if listen_do53 %}
+    interface: 0.0.0.0@{{ port_do53 }}
+{% endif %}
+{% if listen_dot %}
+    interface: 0.0.0.0@{{ port_dot }}
+    tls-port: {{ port_dot }}
+    tls-service-key: "{{ tls_key_path }}"
+    tls-service-pem: "{{ tls_cert_path }}"
+{% endif %}
+    access-control: 0.0.0.0/0 allow
+    # CA bundle used to validate the upstream's TLS certificate.
+    tls-cert-bundle: "{{ ca_path }}"
+    # lab.test is unsigned -> no validator module.
+    module-config: "iterator"
+    # Unbound ships a default RFC 6761 local-zone "test." static that would
+    # answer lab.test with NXDOMAIN before the forward-zone is consulted;
+    # a transparent subzone punches lab.test through to the forwarder.
+    local-zone: "lab.test." transparent
+    domain-insecure: "lab.test."
+    # deterministic healthcheck answer that needs no upstream
+    local-zone: "health.dnslab.test." static
+    local-data: "health.dnslab.test. A 127.0.0.1"
+
+remote-control:
+    control-enable: no
+
+forward-zone:
+    name: "lab.test."
+    forward-addr: {{ upstream_dot.ip }}@{{ upstream_dot.port }}#{{ upstream_dot.tls_hostname }}
+    forward-tls-upstream: yes

@@ -1,0 +1,34 @@
+# dnslab unbound: plain recursive resolver ({{ instance_name }})
+# Listens Do53 + DoT; resolves from the real root (works only if the
+# container has outbound internet). lab.test is NOT forwarded here — it hits
+# Unbound's built-in RFC 6761 local-zone "test." static and returns NXDOMAIN,
+# which the check matrix reports as a forwarding FAIL by design (negative
+# control: this profile has no path to the lab zone).
+server:
+    verbosity: 1
+    username: ""
+    chroot: ""
+    directory: ""
+    pidfile: ""
+    do-daemonize: no
+    do-ip6: no
+    hide-version: yes
+{% if listen_do53 %}
+    interface: 0.0.0.0@{{ port_do53 }}
+{% endif %}
+{% if listen_dot %}
+    interface: 0.0.0.0@{{ port_dot }}
+    tls-port: {{ port_dot }}
+    tls-service-key: "{{ tls_key_path }}"
+    tls-service-pem: "{{ tls_cert_path }}"
+{% endif %}
+    access-control: 0.0.0.0/0 allow
+    # lab zones are unsigned and the container has no root trust anchor
+    # provisioned; run without the validator module.
+    module-config: "iterator"
+    # deterministic healthcheck answer that needs no recursion
+    local-zone: "health.dnslab.test." static
+    local-data: "health.dnslab.test. A 127.0.0.1"
+
+remote-control:
+    control-enable: no

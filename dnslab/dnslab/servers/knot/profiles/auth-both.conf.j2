@@ -1,0 +1,30 @@
+# dnslab knot: combined Do53 + DoT authoritative ({{ instance_name }})
+# Both listeners serve the SAME zone copy (the do53-marker one), so the
+# transport-marker TXT is "do53" on either transport — this profile proves
+# listener coexistence, not transport isolation (use auth-do53/auth-dot
+# for marker-based transport proofs).
+server:
+    rundir: /tmp
+    listen: 0.0.0.0@{{ port_do53 }}
+    listen-tls: 0.0.0.0@{{ port_dot }}
+    cert-file: "{{ tls_cert_path }}"
+    key-file: "{{ tls_key_path }}"
+    version: hidden
+
+log:
+  - target: stdout
+    any: info
+
+database:
+    storage: /tmp
+
+template:
+  - id: default
+    storage: "{{ zones_dir }}"
+    zonefile-sync: -1
+    zonefile-load: whole
+    journal-content: none
+
+zone:
+  - domain: lab.test
+    file: lab.test.do53.zone

@@ -1,0 +1,38 @@
+# Unbound (NLnet Labs) — recursive resolver / forwarder with native DoT on
+# both sides. Built locally from alpine:3.22 (Unbound 1.23.1, --with-ssl)
+# because nlnetlabs publishes no image on Docker Hub; see docker/Dockerfile.
+name: unbound
+tier: 1
+provider: docker
+build: docker
+capabilities:
+  roles: [recursive, forwarder]
+  do53_listener: true
+  # Verified live (1.23.1): interface 0.0.0.0@853 + tls-port + tls-service-
+  # key/pem serves TLS; dnspython + kdig both validate against the lab CA.
+  dot_listener: true
+  # Verified live (1.23.1): forward-zone + forward-tls-upstream: yes +
+  # tls-cert-bundle + forward-addr IP@853#auth-name; marker TXT came back
+  # "dot" from the DoT-only upstream (which has no port 53 at all).
+  dot_upstream_forwarding: true
+  notes: "Unbound 1.23.1 on Alpine 3.22; validator module disabled (lab zone unsigned)."
+default_profile: forwarder-dot
+profiles:
+  recursive:
+    template: profiles/recursive.conf.j2
+    config_path: /dnslab/config/unbound.conf
+    listeners: [do53, dot]
+  forwarder-do53:
+    template: profiles/forwarder-do53.conf.j2
+    config_path: /dnslab/config/unbound.conf
+    listeners: [do53, dot]
+  forwarder-dot:
+    template: profiles/forwarder-dot.conf.j2
+    config_path: /dnslab/config/unbound.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+ports: {do53: 53, dot: 853}
+# Answered from local-data in every profile, so health never depends on
+# upstream reachability or real recursion (lab.test would be wrong for the
+# recursive profile: Unbound's default RFC 6761 "test." zone NXDOMAINs it).
+healthcheck: {qname: "health.dnslab.test", qtype: "A"}

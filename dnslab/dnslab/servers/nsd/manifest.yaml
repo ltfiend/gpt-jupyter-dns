@@ -1,0 +1,41 @@
+# NSD (NLnet Labs) as a server-under-test: authoritative-only.
+#
+# NSD has no recursive/forwarding mode at all, so the only meaningful
+# profiles are authoritative ones. It *does* have a native DoT listener
+# (tls-service-key/pem + tls-port, since 4.3.11): any interface whose port
+# equals tls-port serves TLS. dot_upstream_forwarding is false by design —
+# an authoritative server has no upstreams.
+#
+# No pinned upstream image exists (docker.io/nlnetlabs/nsd is not
+# published), so we build locally from Alpine 3.22, which ships
+# nsd-4.12.0-r0 (verified, see README.md).
+name: nsd
+tier: 1
+provider: docker
+build: docker            # subdir with the Dockerfile (alpine 3.22 + nsd 4.12.0)
+capabilities:
+  roles: [authoritative]
+  do53_listener: true
+  dot_listener: true
+  dot_upstream_forwarding: false
+  notes: "NSD 4.12.0 (Alpine 3.22 apk). Authoritative only; native DoT listener."
+profiles:
+  auth-do53:
+    template: profiles/auth-do53.conf.j2
+    config_path: /dnslab/config/nsd.conf
+    listeners: [do53]
+  auth-dot:
+    template: profiles/auth-dot.conf.j2
+    config_path: /dnslab/config/nsd.conf
+    listeners: [dot]
+    requires: [dot_listener]
+  auth-both:
+    # Realistic production shape: plain 53 AND TLS 853 simultaneously.
+    # Serves the do53-marker zone copy (see README.md).
+    template: profiles/auth-both.conf.j2
+    config_path: /dnslab/config/nsd.conf
+    listeners: [do53, dot]
+    requires: [dot_listener]
+default_profile: auth-both
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

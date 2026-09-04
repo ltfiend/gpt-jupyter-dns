@@ -1,0 +1,28 @@
+# dnslab knot: DoT-ONLY authoritative ({{ instance_name }})
+# listen-tls (Knot >= 3.4) is a plain TCP TLS listener — no XDP. With no
+# "listen:" line nothing serves Do53, so transport isolation holds by
+# construction. cert/key come from the lab CA mount.
+server:
+    rundir: /tmp
+    listen-tls: 0.0.0.0@{{ port_dot }}
+    cert-file: "{{ tls_cert_path }}"
+    key-file: "{{ tls_key_path }}"
+    version: hidden
+
+log:
+  - target: stdout
+    any: info
+
+database:
+    storage: /tmp
+
+template:
+  - id: default
+    storage: "{{ zones_dir }}"
+    zonefile-sync: -1
+    zonefile-load: whole
+    journal-content: none
+
+zone:
+  - domain: lab.test
+    file: lab.test.dot.zone

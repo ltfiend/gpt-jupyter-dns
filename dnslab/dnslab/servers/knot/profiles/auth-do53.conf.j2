@@ -1,0 +1,25 @@
+# dnslab knot: Do53-ONLY authoritative ({{ instance_name }})
+# Zone/config mounts are read-only, so everything knotd writes (pidfile,
+# timers/journal DB) is pointed at /tmp and zonefile writes are disabled.
+server:
+    rundir: /tmp
+    listen: 0.0.0.0@{{ port_do53 }}
+    version: hidden
+
+log:
+  - target: stdout
+    any: info
+
+database:
+    storage: /tmp
+
+template:
+  - id: default
+    storage: "{{ zones_dir }}"
+    zonefile-sync: -1
+    zonefile-load: whole
+    journal-content: none
+
+zone:
+  - domain: lab.test
+    file: lab.test.do53.zone
