@@ -60,38 +60,46 @@ add a third for this repo. You still have three lightweight runner
 processes (an idle runner is a few MB of RAM), but management, disk, Docker,
 and the tool cache are all shared on one box.
 
-**1. Register a runner for this repo** (reuses the already-downloaded
-runner tarball; it self-updates on first connect):
+**1. Register a runner for this repo** — **already done.** The runner
+`cachyworld-jupyter` lives in `~/Git/actions-runner-jupyter`, registered to
+`ltfiend/gpt-jupyter-dns` with labels `self-hosted,Linux,X64`. (For
+reference, the registration was:)
 
 ```bash
-mkdir -p ~/Git/actions-runner-jdns && cd ~/Git/actions-runner-jdns
+mkdir -p ~/Git/actions-runner-jupyter && cd ~/Git/actions-runner-jupyter
 tar xzf ~/Git/actions-runner/actions-runner-linux-x64-*.tar.gz
-
-# repo scope needs admin on the repo; gh already has the token
 TOKEN=$(gh api -X POST repos/ltfiend/gpt-jupyter-dns/actions/runners/registration-token --jq .token)
 ./config.sh --url https://github.com/ltfiend/gpt-jupyter-dns --token "$TOKEN" \
-  --name cachyworld-jdns --labels self-hosted,Linux,X64 --unattended
+  --name cachyworld-jupyter --labels self-hosted,Linux,X64 --work _work --unattended
 ```
 
-**2. Install all three as services** (survive reboot, auto-restart). Run
-once per runner directory:
+**2. Install all three as services** (survive reboot, auto-restart). The two
+existing runners are currently manual `run.sh` processes — stop those first,
+then install each as a service (needs sudo):
 
 ```bash
-for d in ~/Git/actions-runner ~/Git/actions-runner-dnsm ~/Git/actions-runner-jdns; do
+# stop the two manual foreground runners
+pkill -f 'Runner.Listener run'
+
+# create + start a systemd service for each runner
+for d in ~/Git/actions-runner ~/Git/actions-runner-dnsm ~/Git/actions-runner-jupyter; do
   ( cd "$d" && sudo ./svc.sh install peter && sudo ./svc.sh start )
 done
 ```
 
-Stop the old manual `run.sh` processes first so you don't run two copies:
+This creates three units:
 
-```bash
-pkill -f 'Runner.Listener run'   # then start the services as above
-```
+| Service | Repo |
+|---------|------|
+| `actions.runner.ltfiend-neodocker.cachyworld.service` | neodocker |
+| `actions.runner.ltfiend-dns-manager.cachyworld-dnsm.service` | dns-manager |
+| `actions.runner.ltfiend-gpt-jupyter-dns.cachyworld-jupyter.service` | gpt-jupyter-dns |
 
 Check them:
 
 ```bash
 systemctl list-units 'actions.runner.*' --all
+cd ~/Git/actions-runner-jupyter && sudo ./svc.sh status
 ```
 
 **3. (Optional) share the runner binaries.** Each dir currently keeps its
