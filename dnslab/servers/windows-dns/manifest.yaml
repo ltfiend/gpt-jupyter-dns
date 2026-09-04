@@ -40,11 +40,12 @@ profiles:
     # also drops the rendered script in the instance's state dir.
     config_path: /dnslab/userdata.ps1
     listeners: [do53]
-    # profile extra key: upstream forwarders for the DNS Server role.
-    # The lab-auth pair is unreachable from EC2, so default to public
-    # resolvers; override per start: dnslab.start('windows-dns',
-    # forwarders='9.9.9.9 149.112.112.112')
-    forwarders: "1.1.1.1 1.0.0.1"
+    # Forwarder IPs are taken from the shared `upstreams` config (the same
+    # list the DoT servers use — Windows forwards to their IPs over plain
+    # Do53). Override explicitly with a space-separated string if needed:
+    #   dnslab.start('windows-dns', forwarders='9.9.9.9 149.112.112.112')
+    # With neither, the template falls back to 1.1.1.1 / 1.0.0.1.
+    # (No `forwarders` default here on purpose, so `upstreams` is honored.)
 
 ports: {do53: 53, dot: 853}
 healthcheck: {qname: ".", qtype: "SOA"}

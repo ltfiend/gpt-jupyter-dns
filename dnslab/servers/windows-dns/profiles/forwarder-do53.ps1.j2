@@ -13,9 +13,20 @@ try {
     # 2. recursion on (Windows default, made explicit so the profile is honest)
     Set-DnsServerRecursion -Enable $true
 
-    # 3. upstream forwarders (plain Do53 — the role has no DoT client; see README)
+    # 3. upstream forwarders (plain Do53 — the DNS Server role cannot forward
+    #    over DoT/DoH even on Server 2025; see README). The forwarder IPs come
+    #    from, in order of precedence: an explicit `forwarders` string
+    #    override, else the shared `upstreams` list (same config the DoT-
+    #    capable servers use — we take their IPs), else a public default.
+{% if forwarders is defined and forwarders %}
     $forwarders = @('{{ forwarders.split() | join("','") }}')
+{% elif upstreams is defined and upstreams %}
+    $forwarders = @('{{ upstreams | map(attribute="ip") | join("','") }}')
+{% else %}
+    $forwarders = @('1.1.1.1','1.0.0.1')
+{% endif %}
     Set-DnsServerForwarder -IPAddress $forwarders -UseRootHint $true
+    Write-Host ("dnslab forwarders: " + ($forwarders -join ', '))
 
     # 4. Windows firewall: the role's built-in rules cover 53, but add explicit
     #    dnslab rules so the lab does not depend on profile-scoped defaults.
