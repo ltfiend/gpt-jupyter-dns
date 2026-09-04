@@ -1,0 +1,28 @@
+-- dnslab knot-resolver (kresd 5.x, lua): recursive profile ({{ instance_name }})
+-- Full recursion for everything, with lab.test stubbed to the lab's Do53
+-- authoritative upstream so the lab zone resolves inside the sandbox.
+
+cache.size = 5 * MB
+{% if log_debug | default(false) %}
+log_level('debug')
+{% endif %}
+
+-- kresd ships a compiled-in root trust anchor (keyfile_default), so DNSSEC
+-- validation is ON even with no TA in this file. The real root proves .test
+-- is not signed/delegated, which would SERVFAIL validated answers for the
+-- lab zone -- mark the .test subtree insecure to skip validation there.
+trust_anchors.set_insecure({'test.'})
+
+{% if listen_do53 %}
+net.listen('0.0.0.0', {{ port_do53 }}, { kind = 'dns' })
+{% endif %}
+{% if listen_dot %}
+net.tls('{{ tls_cert_path }}', '{{ tls_key_path }}')
+net.listen('0.0.0.0', {{ port_dot }}, { kind = 'tls' })
+{% endif %}
+
+-- policy.STUB: plain resolution against the authoritative server, no
+-- validation, no recursion expected from the upstream.
+policy.add(policy.suffix(
+    policy.STUB('{{ upstream_do53.ip }}@{{ upstream_do53.port }}'),
+    {todname('lab.test')}))

@@ -1,0 +1,28 @@
+-- dnslab knot-resolver (kresd 5.x, lua): forwarder-do53 profile ({{ instance_name }})
+-- Negative control: lab.test goes to the Do53-only upstream over plain 53,
+-- so the transport-marker TXT answer must read "do53".
+
+cache.size = 5 * MB
+{% if log_debug | default(false) %}
+log_level('debug')
+{% endif %}
+
+-- kresd ships a compiled-in root trust anchor (keyfile_default), so DNSSEC
+-- validation is ON even with no TA in this file. The real root proves .test
+-- is not signed/delegated, which would SERVFAIL validated answers for the
+-- lab zone -- mark the .test subtree insecure to skip validation there.
+trust_anchors.set_insecure({'test.'})
+
+{% if listen_do53 %}
+net.listen('0.0.0.0', {{ port_do53 }}, { kind = 'dns' })
+{% endif %}
+{% if listen_dot %}
+net.tls('{{ tls_cert_path }}', '{{ tls_key_path }}')
+net.listen('0.0.0.0', {{ port_dot }}, { kind = 'tls' })
+{% endif %}
+
+-- policy.STUB suits an authoritative-only upstream (no RA expected) and
+-- skips validation for the stubbed subtree by design.
+policy.add(policy.suffix(
+    policy.STUB('{{ upstream_do53.ip }}@{{ upstream_do53.port }}'),
+    {todname('lab.test')}))

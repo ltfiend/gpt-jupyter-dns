@@ -1,0 +1,39 @@
+# Knot Resolver (kresd) 5.x — lua config dialect, single-process daemon.
+#
+# The image's entrypoint is /usr/sbin/kresd, so `command` below is argv
+# APPENDED to that entrypoint: config path, non-interactive mode (no
+# stdin REPL — mandatory for a detached container), and rundir /tmp so
+# the LMDB cache lands somewhere writable (the image has no
+# /var/cache/knot-resolver and the default rundir is ".").
+name: knot-resolver
+tier: 1
+provider: docker
+image: cznic/knot-resolver:v5.7.8
+config_dialect: lua  # informational: 5.x lua/kresd, not 6.x YAML/manager
+command: ["-c", "/dnslab/config/kresd.conf", "-n", "/tmp"]
+capabilities:
+  roles: [recursive, forwarder]
+  do53_listener: true
+  dot_listener: true
+  dot_upstream_forwarding: true
+  notes: >-
+    Verified on cznic/knot-resolver:v5.7.8: native DoT listener via
+    net.tls()+net.listen(kind='tls'); DoT upstream via
+    policy.TLS_FORWARD with the lab CA pinned through ca_file=.
+default_profile: recursive
+profiles:
+  recursive:
+    template: profiles/recursive.conf.j2
+    config_path: /dnslab/config/kresd.conf
+    listeners: [do53, dot]
+  forwarder-do53:
+    template: profiles/forwarder-do53.conf.j2
+    config_path: /dnslab/config/kresd.conf
+    listeners: [do53, dot]
+  forwarder-dot:
+    template: profiles/forwarder-dot.conf.j2
+    config_path: /dnslab/config/kresd.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

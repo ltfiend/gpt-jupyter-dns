@@ -1,0 +1,32 @@
+-- dnslab knot-resolver (kresd 5.x, lua): forwarder-dot profile ({{ instance_name }})
+-- lab.test is forwarded over TLS to the DoT-ONLY lab upstream, whose cert is
+-- validated against the lab CA (ca_file) for the upstream's TLS hostname.
+-- The upstream has no Do53 listener at all, so any lab.test answer proves the
+-- TLS path was used; the marker TXT must read "dot".
+
+cache.size = 5 * MB
+{% if log_debug | default(false) %}
+log_level('debug')
+{% endif %}
+
+-- kresd ships a compiled-in root trust anchor (keyfile_default), so DNSSEC
+-- validation is ON even with no TA in this file. The real root proves .test
+-- is not signed/delegated, which would SERVFAIL validated answers for the
+-- lab zone -- mark the .test subtree insecure to skip validation there.
+trust_anchors.set_insecure({'test.'})
+
+{% if listen_do53 %}
+net.listen('0.0.0.0', {{ port_do53 }}, { kind = 'dns' })
+{% endif %}
+{% if listen_dot %}
+net.tls('{{ tls_cert_path }}', '{{ tls_key_path }}')
+net.listen('0.0.0.0', {{ port_dot }}, { kind = 'tls' })
+{% endif %}
+
+policy.add(policy.suffix(
+    policy.TLS_FORWARD({
+        { '{{ upstream_dot.ip }}@{{ upstream_dot.port }}',
+          hostname = '{{ upstream_dot.tls_hostname }}',
+          ca_file = '{{ ca_path }}' },
+    }),
+    {todname('lab.test')}))
