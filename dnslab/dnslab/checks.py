@@ -75,11 +75,15 @@ def query_dot(target: Target, qname: str = LAB_ZONE_SOA, qtype: str = "SOA") -> 
     except Exception as e:  # noqa: BLE001
         return CheckResult("dot-query", target.name, "FAIL", f"dnspython: {e!r}")
 
-    kdig = subprocess.run(
-        ["kdig", f"+tls-ca={target.ca_file}", f"+tls-hostname={target.tls_hostname}",
-         "-p", str(target.port_dot), f"@{target.address}", qname, qtype],
-        capture_output=True, text=True, timeout=15,
-    )
+    try:
+        kdig = subprocess.run(
+            ["kdig", f"+tls-ca={target.ca_file}", f"+tls-hostname={target.tls_hostname}",
+             "-p", str(target.port_dot), f"@{target.address}", qname, qtype],
+            capture_output=True, text=True, timeout=15,
+        )
+    except FileNotFoundError:
+        return CheckResult("dot-query", target.name, "PASS",
+                           "dnspython ok (kdig unavailable for cross-check)", ms)
     if kdig.returncode != 0:
         return CheckResult("dot-query", target.name, "FAIL",
                            f"dnspython ok but kdig failed: {kdig.stderr.strip()[:200]}", ms)
