@@ -2,6 +2,7 @@ data/*
 !data/dns-examples.ipynb
 !data/dns-dot-migration-test.ipynb
 !data/dns-resolver-fuzzer.ipynb
+!data/dot-forwarding-lab.ipynb
 workspace/
 
 # Secrets and credentials

@@ -1,0 +1,16 @@
+; dnslab test zone — served by the DoT-ONLY upstream (lab-auth-dot).
+; The transport-marker TXT identifies which upstream answered.
+$ORIGIN lab.test.
+$TTL 60
+@                IN SOA ns.lab.test. admin.lab.test. (
+                     2026090301 ; serial
+                     3600       ; refresh
+                     900        ; retry
+                     604800     ; expire
+                     60 )       ; minimum
+@                IN NS   ns.lab.test.
+ns               IN A    192.0.2.53
+@                IN TXT  "dnslab lab.test zone (dot upstream)"
+transport-marker IN TXT  "dot"
+a                IN A    192.0.2.1
+aaaa             IN AAAA 2001:db8::1

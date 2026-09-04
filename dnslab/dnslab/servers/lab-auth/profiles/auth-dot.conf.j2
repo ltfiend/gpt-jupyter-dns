@@ -1,0 +1,21 @@
+# dnslab lab-auth: DoT-ONLY authoritative upstream ({{ instance_name }})
+# The only interface is @{{ port_dot }}, which equals tls-port, so NSD serves
+# TLS there and nothing listens on plain 53 — transport isolation by construction.
+server:
+    verbosity: 1
+    username: ""
+    zonesdir: "{{ zones_dir }}"
+    database: ""
+    interface: 0.0.0.0@{{ port_dot }}
+    hide-version: yes
+    zonefiles-write: 0
+    tls-service-key: "{{ tls_key_path }}"
+    tls-service-pem: "{{ tls_cert_path }}"
+    tls-port: {{ port_dot }}
+
+remote-control:
+    control-enable: no
+
+zone:
+    name: "lab.test"
+    zonefile: "lab.test.dot.zone"

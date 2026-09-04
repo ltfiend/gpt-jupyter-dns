@@ -1,0 +1,32 @@
+# Framework-owned upstream pair for forwarding-over-DoT proofs.
+#
+# Two transport-isolated instances of the same NSD image serve the same
+# lab.test zone with a DIFFERENT transport-marker TXT record:
+#   lab-auth-do53  -> listens ONLY on 53/udp+tcp, marker TXT "do53"
+#   lab-auth-dot   -> listens ONLY on 853/TLS,    marker TXT "dot"
+# A forwarder pointed at lab-auth-dot that answers lab.test at all must have
+# used TLS, and the marker value in the answer proves which upstream served it.
+name: lab-auth
+tier: 1
+provider: docker
+build: docker            # subdir with the Dockerfile (alpine + nsd)
+capabilities:
+  roles: [authoritative]
+  do53_listener: true
+  dot_listener: true
+  dot_upstream_forwarding: false
+  notes: "Framework-owned transport-isolated upstream pair (NSD on Alpine)."
+instances:
+  lab-auth-do53: {profile: auth-do53}
+  lab-auth-dot: {profile: auth-dot}
+profiles:
+  auth-do53:
+    template: profiles/auth-do53.conf.j2
+    config_path: /dnslab/config/nsd.conf
+    listeners: [do53]
+  auth-dot:
+    template: profiles/auth-dot.conf.j2
+    config_path: /dnslab/config/nsd.conf
+    listeners: [dot]
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

@@ -56,7 +56,7 @@ check_cli aws  aws --version
 check_cli jupyter jupyter --version
 
 echo "== Python libraries =="
-for mod in dns boto3 git matplotlib pandas rich tabulate ipywidgets nbconvert ipynbname jupyterlab; do
+for mod in dns boto3 git matplotlib pandas rich tabulate ipywidgets nbconvert ipynbname jupyterlab docker yaml cryptography jinja2; do
   if python -c "import $mod" 2>/dev/null; then
     pass "python: import $mod"
   else

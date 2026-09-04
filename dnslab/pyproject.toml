@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dnslab"
+version = "0.1.0"
+description = "Multi-server DNS-over-TLS test lab orchestration for the gpt-jupyter-dns notebook environment"
+requires-python = ">=3.11"
+dependencies = [
+    "dnspython",
+    "docker",
+    "PyYAML",
+    "cryptography",
+    "jinja2",
+]
+
+[project.optional-dependencies]
+aws = ["boto3"]
+notebook = ["pandas", "rich"]
+
+[tool.setuptools.packages.find]
+include = ["dnslab*"]
+
+[tool.setuptools.package-data]
+dnslab = ["servers/**/*"]

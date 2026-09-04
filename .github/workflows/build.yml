@@ -73,6 +73,15 @@ jobs:
             --entrypoint bash \
             ${{ env.CI_TAG }} /t/smoke-test.sh
 
+      - name: dnslab lint (manifests + config templates)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/test:/t:ro" \
+            -v "${{ github.workspace }}/dnslab:/opt/dnslab/dnslab:ro" \
+            -e PYTHONPATH=/opt/dnslab \
+            --entrypoint bash \
+            ${{ env.CI_TAG }} /t/dnslab-lint.sh
+
       # ---- Vulnerability scan (report-only; base-image CVEs shouldn't block) ----
       - name: Trivy scan (SARIF for Security tab)
         uses: aquasecurity/trivy-action@0.28.0

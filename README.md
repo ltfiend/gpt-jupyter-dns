@@ -77,6 +77,36 @@ Optional environment variables (set in `compose.yaml`):
 | `S3_URI` | Sync notebooks from S3 on startup |
 | `EXTRA_PIP` | Install additional pip packages at container start |
 
+## dnslab — multi-server DNS-over-TLS test lab
+
+The `dnslab/` package (bind-mounted at `/opt/dnslab/dnslab`, already on
+`PYTHONPATH`) lets notebooks launch, target, and functionally test DNS
+servers — locally as Docker containers or in AWS via boto3 — with a focus
+on DNS-over-TLS forwarding. See `data/dot-forwarding-lab.ipynb`.
+
+```python
+import dnslab
+dnslab.registry()                              # available server modules
+dnslab.start('lab-auth')                       # transport-isolated upstream pair
+dnslab.start('unbound', profile='forwarder-dot')
+dnslab.checks.run_matrix(dnslab.targets())     # PASS/FAIL/SKIP matrix
+dnslab.nuke()                                  # tear everything down
+```
+
+Notes:
+- The compose file mounts `/var/run/docker.sock` and adds the container to
+  the host `docker` group (`group_add`). If your host's docker gid is not
+  `958`, set `DOCKER_GID` in a `.env` file (`getent group docker`).
+- Server containers join the `dnslab` docker network with hostnames like
+  `unbound.dnslab.test`; certificates are issued by a throwaway lab CA in
+  `workspace/certs/dnslab/` (`dnslab.ca_file()`).
+- Config templates are editable on the host under
+  `dnslab/dnslab/servers/<name>/profiles/` — re-run `dnslab.start()` to
+  apply, no image rebuild needed.
+- The EC2 tier launches instances tagged `dnslab=1` with a 4h expiry tag
+  and a security group scoped to your public IP; `dnslab.nuke()` removes
+  everything.
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/build.yml`) lints, builds, tests, scans,

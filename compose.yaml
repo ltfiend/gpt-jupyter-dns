@@ -9,9 +9,19 @@ services:
     # Map a local folder for persistence
     volumes:
       - /home/peter/Git/gpt-jupyter-dns/workspace:/workspace
-      # Optional: pass through your AWS credentials for S3 pulls
+      # dnslab orchestration package (edit on host, no rebuild needed)
+      - /home/peter/Git/gpt-jupyter-dns/dnslab:/opt/dnslab/dnslab:ro
+      # docker socket so notebooks can start sibling DNS-server containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Optional: pass through your AWS credentials for S3 pulls / EC2 tier
       # - ~/.aws:/home/nbuser/.aws:ro
-    # environment:
+    environment:
+      PYTHONPATH: /opt/dnslab
+      # Host-side paths of the two mounts above — dnslab translates bind-mount
+      # sources for sibling containers (the docker daemon resolves them on the host).
+      DNSLAB_HOST_WORKSPACE: /home/peter/Git/gpt-jupyter-dns/workspace
+      DNSLAB_HOST_DNSLAB: /home/peter/Git/gpt-jupyter-dns/dnslab
+      DNSLAB_NETWORK: dnslab
       # Override to change the JupyterLab password (default: dnslab)
       # JUPYTER_TOKEN: "your-secret-token"
       # Optional: automatically pull notebooks
@@ -21,4 +31,15 @@ services:
       # Optional: install extra python libs at container start
       # EXTRA_PIP: "scapy aiohttp"
     user: "1000:1000"
+    # Host docker group gid so nbuser may use the socket (`getent group docker`).
+    # Override with DOCKER_GID in a .env file if your host differs.
+    group_add:
+      - "${DOCKER_GID:-958}"
+    networks:
+      - dnslab
 
+# Shared network for the notebook + DNS-server containers; server instances
+# get aliases like unbound.dnslab.test so TLS hostname validation works.
+networks:
+  dnslab:
+    name: dnslab

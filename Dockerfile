@@ -108,6 +108,13 @@ RUN pip install --no-cache-dir --no-compile \
         tabulate \
         ipynbname \
         "nbconvert[webpdf]" \
+        # dnslab orchestration deps: docker sdk (sibling containers), yaml
+        # manifests, lab CA issuance, config templating (jinja2 pinned
+        # explicitly even though jupyterlab pulls it in)
+        docker \
+        pyyaml \
+        cryptography \
+        jinja2 \
   && find /usr/local/lib/python3.13 -depth \
         \( -type d \( -name tests -o -name test -o -name __pycache__ \) \
         -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
