@@ -1,0 +1,40 @@
+# BIND 9 (ISC) — recursive resolver / forwarder with native DoT on both
+# sides: TLS listener (9.18+) and TLS to upstream forwarders (9.18+,
+# verified live on this pinned image, see README.md).
+#
+# NB: the image's entrypoint is ["/usr/sbin/named", "-u", "bind"], so
+# `command` here is ARGUMENTS appended to that entrypoint, not a full
+# command line. -g = stay in foreground and log to stderr (docker logs).
+name: bind
+tier: 1
+provider: docker
+image: internetsystemsconsortium/bind9:9.20
+command: ["-g", "-c", "/dnslab/config/named.conf"]
+lint: named-checkconf
+capabilities:
+  roles: [recursive, forwarder]
+  do53_listener: true
+  dot_listener: true
+  # Verified live on internetsystemsconsortium/bind9:9.20 (named 9.20.24):
+  # forwarders { <ip> port 853 tls <tlsname>; } with a tls clause carrying
+  # ca-file + remote-hostname forwards over TLS with strict validation —
+  # the DoT-only lab upstream's marker TXT "dot" came back.
+  dot_upstream_forwarding: true
+  notes: "Native DoT both directions; command is entrypoint args (see above)."
+default_profile: recursive
+profiles:
+  recursive:
+    template: profiles/recursive.conf.j2
+    config_path: /dnslab/config/named.conf
+    listeners: [do53, dot]
+  forwarder-do53:
+    template: profiles/forwarder-do53.conf.j2
+    config_path: /dnslab/config/named.conf
+    listeners: [do53, dot]
+  forwarder-dot:
+    template: profiles/forwarder-dot.conf.j2
+    config_path: /dnslab/config/named.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

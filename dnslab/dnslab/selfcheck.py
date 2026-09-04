@@ -16,7 +16,7 @@ import jinja2
 
 # NB: import from the submodule directly — the package facade exposes a
 # registry() *function* that shadows the submodule attribute.
-from .registry import ManifestError, discover
+from .registry import ManifestError, discover, get
 
 DUMMY_UPSTREAM = {"host": "upstream.dnslab.test", "ip": "192.0.2.53",
                   "port": 53, "tls_hostname": "upstream.dnslab.test"}
@@ -60,13 +60,17 @@ def lint_rendered(spec, profile, rendered: str) -> str | None:
 
 def main(argv: list[str]) -> int:
     only = set(argv)
-    specs = discover()
     if only:
-        missing = only - specs.keys()
-        if missing:
-            print(f"unknown servers: {sorted(missing)}", file=sys.stderr)
+        # scoped run: load just the named manifests so a broken sibling
+        # (e.g. another agent mid-edit) can't fail this module's check
+        try:
+            specs = {name: get(name) for name in sorted(only)}
+        except (KeyError, ManifestError) as e:
+            print(f"FAIL: {e}", file=sys.stderr)
             return 2
-        specs = {k: v for k, v in specs.items() if k in only}
+    else:
+        # full run (CI): every manifest must parse
+        specs = discover(strict=True)
     if not specs:
         print("no server manifests found", file=sys.stderr)
         return 2

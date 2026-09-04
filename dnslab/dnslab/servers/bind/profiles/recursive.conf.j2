@@ -1,0 +1,34 @@
+// dnslab bind — recursive profile ({{ instance_name }})
+// Recursive resolver with Do53 + DoT listeners. The lab zone is reached
+// via static-stub (real iterative resolution to the lab authoritative,
+// not forwarding), so `lab.test` resolves without public delegation.
+
+tls dnslab-tls {
+    key-file "{{ tls_key_path }}";
+    cert-file "{{ tls_cert_path }}";
+};
+
+options {
+    directory "/tmp";               // writable at any uid; also exists on lint hosts
+    pid-file none;
+    recursion yes;
+    allow-query { any; };           // lab network only — never expose like this
+    allow-recursion { any; };
+    dnssec-validation no;           // lab.test is unsigned
+{% if listen_do53 %}
+    listen-on port {{ port_do53 }} { any; };
+{% else %}
+    listen-on { none; };
+{% endif %}
+{% if listen_dot %}
+    listen-on port {{ port_dot }} tls dnslab-tls { any; };
+{% endif %}
+    listen-on-v6 { none; };
+};
+
+controls { };                       // no rndc
+
+zone "lab.test" {
+    type static-stub;
+    server-addresses { {{ upstream_do53.ip }}; };
+};

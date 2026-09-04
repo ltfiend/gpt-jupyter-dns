@@ -1,0 +1,40 @@
+// dnslab bind — forwarder-dot profile ({{ instance_name }})
+// Forwards the lab zone to the DoT-ONLY lab upstream over TLS 853 with
+// strict validation: ca-file pins the lab CA, remote-hostname must match
+// the upstream cert's SAN (and is also sent as SNI).
+
+tls dnslab-tls {
+    key-file "{{ tls_key_path }}";
+    cert-file "{{ tls_cert_path }}";
+};
+
+tls upstream-tls {
+    ca-file "{{ ca_path }}";
+    remote-hostname "{{ upstream_dot.tls_hostname }}";
+};
+
+options {
+    directory "/tmp";               // writable at any uid; also exists on lint hosts
+    pid-file none;
+    recursion yes;
+    allow-query { any; };           // lab network only — never expose like this
+    allow-recursion { any; };
+    dnssec-validation no;           // lab.test is unsigned
+{% if listen_do53 %}
+    listen-on port {{ port_do53 }} { any; };
+{% else %}
+    listen-on { none; };
+{% endif %}
+{% if listen_dot %}
+    listen-on port {{ port_dot }} tls dnslab-tls { any; };
+{% endif %}
+    listen-on-v6 { none; };
+};
+
+controls { };                       // no rndc
+
+zone "lab.test" {
+    type forward;
+    forward only;
+    forwarders { {{ upstream_dot.ip }} port {{ upstream_dot.port }} tls upstream-tls; };
+};
