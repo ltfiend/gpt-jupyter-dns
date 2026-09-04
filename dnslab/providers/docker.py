@@ -10,6 +10,8 @@ published. Bind-mount sources are translated to host paths via
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import time
 
@@ -118,13 +120,56 @@ class DockerProvider(Provider):
         return config_file, (zones_dst if zones_src.is_dir() else None)
 
     # ---- lifecycle ---------------------------------------------------------
+    @staticmethod
+    def _confhash(spec: ServerSpec, config_file, zones_dir) -> str:
+        """Fingerprint of everything that shapes a running container, so
+        start() can tell an unchanged instance from config drift."""
+        h = hashlib.sha256()
+        h.update(config_file.read_bytes())
+        if zones_dir:
+            for f in sorted(p for p in zones_dir.rglob("*") if p.is_file()):
+                h.update(f.name.encode())
+                h.update(f.read_bytes())
+        h.update(json.dumps([spec.image, spec.build, spec.command]).encode())
+        return h.hexdigest()[:16]
+
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
-              *, wait: bool = True, timeout: float = 60, **overrides) -> Instance:
+              *, wait: bool = True, timeout: float = 60, force: bool = False,
+              **overrides) -> Instance:
         import docker
 
         self.ensure_network()
         certs.ensure_cert(instance_name)
         config_file, zones_dir = self.render(spec, profile, instance_name, overrides)
+        confhash = self._confhash(spec, config_file, zones_dir)
+
+        # Reuse a running container whose profile AND rendered config are
+        # unchanged and that still answers its healthcheck; anything else
+        # (drift, unhealthy, force=True) is recreated below.
+        cname = f"dnslab-{instance_name}"
+        existing = None
+        try:
+            existing = self._c.containers.get(cname)
+        except docker.errors.NotFound:
+            pass
+        if existing is not None and not force:
+            lbl = existing.labels
+            if (existing.status == "running"
+                    and lbl.get(f"{LABEL}-profile") == profile.name
+                    and lbl.get(f"{LABEL}-confhash") == confhash):
+                inst = Instance(
+                    name=instance_name, server=spec.name, profile=profile.name,
+                    provider=self.name, id=existing.id[:12],
+                    host=f"{instance_name}.{DOMAIN}",
+                    ip=self._container_ip(existing), status="running",
+                )
+                try:
+                    self._wait_healthy(spec, profile, inst, existing,
+                                       min(timeout, 15))
+                    inst.status = "reused"
+                    return inst
+                except (TimeoutError, RuntimeError):
+                    pass  # running but not answering — fall through to recreate
 
         image = spec.image
         if spec.build:
@@ -138,10 +183,8 @@ class DockerProvider(Provider):
         else:
             raise ValueError(f"server {spec.name!r}: manifest needs 'image' or 'build'")
 
-        cname = f"dnslab-{instance_name}"
         try:
-            old = self._c.containers.get(cname)
-            old.remove(force=True)
+            self._c.containers.get(cname).remove(force=True)
         except docker.errors.NotFound:
             pass
 
@@ -163,6 +206,7 @@ class DockerProvider(Provider):
                 f"{LABEL}-server": spec.name,
                 f"{LABEL}-instance": instance_name,
                 f"{LABEL}-profile": profile.name,
+                f"{LABEL}-confhash": confhash,
             },
             volumes=volumes,
             detach=True,

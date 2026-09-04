@@ -633,3 +633,21 @@ Looks good.  Let's get the windows server running, what do you need from me.  I 
 
 ---
 
+## 2026-09-04 01:27:33
+
+<task-notification>
+<task-id>bospmyvth</task-id>
+<tool-use-id>toolu_01FykGH2SHvtjgXTem3mJgxU</tool-use-id>
+<output-file>/tmp/claude-1000/-home-peter-Git-gpt-jupyter-dns/2ad22aa3-0503-4005-b2d0-a3a79832265c/tasks/bospmyvth.output</output-file>
+<status>completed</status>
+<summary>Background command "Launch windows-dns EC2 instance (clean cwd)" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+## 2026-09-04 01:36:42
+
+Improve the real upstream notebook to be smarter when starting the servers.  If it already exists just test that it's accesssible and use that instance.  Currently it's forcing a restart of the windows instance regardless of if it's running already.
+
+---
+

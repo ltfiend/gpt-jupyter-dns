@@ -226,6 +226,17 @@ class Ec2Provider(Provider):
         except Exception as e:  # noqa: BLE001
             raise _wrap(e, f"resolving AMI via SSM parameter {value!r}") from e
 
+    def _authorize_current_ip(self, ec2, sg_id: str, rdp: bool) -> None:
+        """Add ingress for the caller's current /32 (idempotent) so a reused
+        instance stays reachable after the caller's public IP changes."""
+        cidr = f"{caller_public_ip()}/32"
+        try:
+            ec2.authorize_security_group_ingress(
+                GroupId=sg_id, IpPermissions=sg_ingress_rules(cidr, rdp))
+        except Exception as e:  # noqa: BLE001
+            if "InvalidPermission.Duplicate" not in str(e):
+                raise _wrap(e, f"re-authorizing ingress on {sg_id}") from e
+
     def _ensure_sg(self, ec2, sg_name: str, rdp: bool, tags: list[dict]) -> str:
         """Create (or reuse) the session SG, scoped to the caller's /32."""
         cidr = f"{caller_public_ip()}/32"
@@ -252,8 +263,45 @@ class Ec2Provider(Provider):
 
     # ---- lifecycle ---------------------------------------------------------
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
-              *, wait: bool = True, timeout: float = 600, **overrides) -> Instance:
+              *, wait: bool = True, timeout: float = 600, force: bool = False,
+              **overrides) -> Instance:
         ec2 = self._ec2()
+
+        itype = str(spec.raw.get("instance_type", DEFAULT_INSTANCE_TYPE))
+        userdata = self.render_userdata(spec, profile, instance_name, overrides)
+        import hashlib
+        confhash = hashlib.sha256(
+            (userdata + "\x00" + itype).encode()).hexdigest()[:16]
+
+        # Reuse a live instance whose profile AND rendered user-data are
+        # unchanged (dnslab-confhash tag) and that still answers on 53 —
+        # relaunching Windows costs minutes and money. force=True, config
+        # drift, or a dead responder all fall through to replace-and-launch.
+        if not force:
+            for aws_inst in self._describe(states=("pending", "running")):
+                tags = _tags_dict(aws_inst.get("Tags"))
+                if tags.get(f"{TAG}-instance") != instance_name:
+                    continue
+                if (tags.get(f"{TAG}-profile") == profile.name
+                        and tags.get(f"{TAG}-confhash") == confhash):
+                    reused = next((i for i in self.discover()
+                                   if i.name == instance_name), None)
+                    if reused is not None:
+                        # An unchanged instance can still be unreachable if the
+                        # caller's public IP drifted since launch — re-authorize
+                        # its SG for the current /32 rather than relaunch.
+                        sg_id = (reused.extra or {}).get("sg_id")
+                        if sg_id:
+                            self._authorize_current_ip(ec2, sg_id,
+                                                       bool(spec.raw.get("rdp")))
+                        try:
+                            self._wait_healthy(spec, reused,
+                                               min(timeout, 30) if wait else 10)
+                            reused.status = "reused " + reused.status
+                            self._remember(reused)
+                            return reused
+                        except (TimeoutError, RuntimeError):
+                            break  # live but not answering — replace it
 
         # replace a previous instance of the same name (mirrors docker)
         for old in self.discover():
@@ -270,15 +318,15 @@ class Ec2Provider(Provider):
             {"Key": f"{TAG}-profile", "Value": profile.name},
             {"Key": f"{TAG}-session", "Value": session},
             {"Key": f"{TAG}-expires", "Value": expires},
+            {"Key": f"{TAG}-confhash", "Value": confhash},
             {"Key": "Name", "Value": f"dnslab-{instance_name}"},
         ]
         sg_id = self._ensure_sg(ec2, f"dnslab-{session}", bool(spec.raw.get("rdp")), tags)
-        userdata = self.render_userdata(spec, profile, instance_name, overrides)
 
         try:
             resp = ec2.run_instances(
                 ImageId=ami,
-                InstanceType=str(spec.raw.get("instance_type", DEFAULT_INSTANCE_TYPE)),
+                InstanceType=itype,
                 MinCount=1, MaxCount=1,
                 UserData=userdata,
                 NetworkInterfaces=[{

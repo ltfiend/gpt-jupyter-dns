@@ -22,7 +22,8 @@ class ExternalProvider(Provider):
     name = "external"
 
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
-              *, wait: bool = True, timeout: float = 60, **overrides) -> Instance:
+              *, wait: bool = True, timeout: float = 60, force: bool = False,
+              **overrides) -> Instance:
         ext = spec.raw.get("external", {})
         host = ext.get("host") or instance_name
         ip = ext.get("ip") or socket.gethostbyname(host)
