@@ -9,8 +9,10 @@ services:
     # Map a local folder for persistence
     volumes:
       - /home/peter/Git/gpt-jupyter-dns/workspace:/workspace
-      # dnslab orchestration package (edit on host, no rebuild needed)
-      - /home/peter/Git/gpt-jupyter-dns/dnslab:/opt/dnslab/dnslab:ro
+      # dnslab orchestration package (edit on host, no rebuild needed).
+      # Mounts the project dir at /opt/dnslab so the inner package lands at
+      # /opt/dnslab/dnslab (= importable via PYTHONPATH=/opt/dnslab).
+      - /home/peter/Git/gpt-jupyter-dns/dnslab:/opt/dnslab:ro
       # docker socket so notebooks can start sibling DNS-server containers
       - /var/run/docker.sock:/var/run/docker.sock
       # Optional: pass through your AWS credentials for S3 pulls / EC2 tier
@@ -20,7 +22,7 @@ services:
       # Host-side paths of the two mounts above — dnslab translates bind-mount
       # sources for sibling containers (the docker daemon resolves them on the host).
       DNSLAB_HOST_WORKSPACE: /home/peter/Git/gpt-jupyter-dns/workspace
-      DNSLAB_HOST_DNSLAB: /home/peter/Git/gpt-jupyter-dns/dnslab
+      DNSLAB_HOST_DNSLAB: /home/peter/Git/gpt-jupyter-dns/dnslab/dnslab
       DNSLAB_NETWORK: dnslab
       # Override to change the JupyterLab password (default: dnslab)
       # JUPYTER_TOKEN: "your-secret-token"
