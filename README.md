@@ -100,6 +100,65 @@ dnslab.checks.run_matrix(dnslab.targets())     # PASS/FAIL/SKIP matrix
 dnslab.nuke()                                  # tear everything down
 ```
 
+### Server modules
+
+Server modules are auto-discovered from `dnslab/servers/<name>/` (manifest +
+jinja2 config templates, no central registry). Current roster:
+
+| Module | Runs as | Roles | Profiles |
+|--------|---------|-------|----------|
+| `unbound` (1.23.1) | docker, local Alpine build | recursive, forwarder | `recursive`, `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
+| `bind` (9.20) | docker, `internetsystemsconsortium/bind9:9.20` | recursive, forwarder | `recursive`, `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
+| `knot-resolver` (5.7.8) | docker, `cznic/knot-resolver:v5.7.8` | recursive, forwarder | `recursive`, `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
+| `knot` (3.5.4) | docker, `cznic/knot:v3.5.4` | authoritative | `auth-do53`, `auth-dot`, `auth-both` |
+| `nsd` (4.12.0) | docker, local Alpine build | authoritative | `auth-do53`, `auth-dot`, `auth-both` |
+| `lab-auth` | docker, local Alpine build | framework upstream pair | `auth-do53` + `auth-dot` (both start) |
+| `windows-dns` | EC2, Windows Server 2025 AMI | Do53 forwarder | `forwarder-do53` |
+| `windows-client-dot` | EC2, Windows Server 2025 AMI | stub-resolver DoT **client** | `stub-dot` |
+
+Capability flags in each manifest are verified against the pinned
+image/AMI; a check for an unsupported feature reports SKIP, never FAIL
+(e.g. Windows DNS Server has no DoT listener, so its DoT checks skip).
+
+### Running servers
+
+```python
+dnslab.start('knot')                            # default profile (auth-dot)
+dnslab.start('knot', profile='auth-both')       # plain 53 + TLS 853 together
+dnslab.start('unbound', profile='global-forwarder-dot',
+             upstreams=[{'ip': '9.9.9.9', 'port': 853,
+                         'tls_hostname': 'dns.quad9.net'}])
+dnslab.start('unbound', force=True)             # recreate even if healthy
+dnslab.status()                                 # all instances, both providers
+dnslab.logs('unbound')
+dnslab.stop('unbound')                          # or dnslab.stop(all=True)
+```
+
+- **Idempotent start** — `dnslab.start()` reuses a running instance when
+  the profile and rendered config are unchanged and it still answers its
+  healthcheck (status `reused`). Config drift replaces it; `force=True`
+  always recreates; an instance still booting is waited for, never
+  relaunched.
+- **Per-server start budgets** — with `timeout=None` (the default) each
+  server uses its manifest `start_timeout` (60s docker default, 600s EC2,
+  900s for the Windows modules, which install roles and reboot on first
+  boot).
+- **EC2 stop/resume** — `dnslab.stop()`/`nuke()` **terminate** EC2
+  instances. To pause billing instead, `aws ec2 stop-instances`; the next
+  `dnslab.start()` resumes the stopped instance (status `resumed`) rather
+  than relaunching, and re-scopes the security group to your current
+  public IP.
+- **Windows DoT client** — `windows-client-dot` is a client, not a server:
+  its stub resolver sends queries over DoT/853. It carries an SSM instance
+  profile (`dnslab-ssm`, created on demand), and
+  `dnslab.checks.windows_dot_client_report('windows-client-dot')` proves
+  DoT on-box: resolution succeeds with plaintext 53 blocked while holding
+  an established `:853` connection.
+
+The package also runs directly on the host (no notebook container):
+`pip install -e .` from the repo root, then `import dnslab` uses the
+docker socket and AWS credentials directly.
+
 Notes:
 - The compose file mounts `/var/run/docker.sock` and adds the container to
   the host `docker` group (`group_add`). If your host's docker gid is not
@@ -113,6 +172,52 @@ Notes:
 - The EC2 tier launches instances tagged `dnslab=1` with a 4h expiry tag
   and a security group scoped to your public IP; `dnslab.nuke()` removes
   everything.
+
+## Transferring to another server
+
+The simplest move is `git clone` on the new host, but if copying files
+directly, these are required:
+
+**Required (image build + runtime):**
+
+| Path | Purpose |
+|------|---------|
+| `Dockerfile` | notebook image definition |
+| `compose.yaml` | service, ports, mounts, dnslab network |
+| `entrypoint.sh` | startup (Git/S3 sync, extra pip, JupyterLab launch) — copied into the image |
+| `jupyter_server_config.py` | Jupyter server settings — copied into the image |
+| `dnslab/` | entire orchestration package, including `dnslab/servers/**` (manifests, config templates, zone files, per-server Dockerfiles) |
+| `data/` | git-tracked source notebooks (the dnslab notebooks live here) |
+
+**Optional:**
+
+| Path | Purpose |
+|------|---------|
+| `pyproject.toml` | only for host-side `pip install -e .` use |
+| `test/` | smoke test + dnslab lint (CI) |
+| `.github/`, `docs/` | CI workflow and runner docs |
+| `.env` | `DOCKER_GID` override if the new host's docker gid ≠ 958 |
+| `workspace/notebooks/` | only if you want to carry over working notebooks |
+
+**Not transferable / recreated on the new host:**
+
+- `workspace/` is gitignored runtime state — `certs/` (throwaway lab CA,
+  regenerated) and `dnslab-state/` are host-specific; let them regenerate.
+- `~/.aws` credentials for the EC2 tier are mounted from the host's home
+  directory, not the repo — configure them on the new host.
+
+**Must be edited after copying:** `compose.yaml` uses absolute host paths
+(`/home/peter/Git/gpt-jupyter-dns/...`) in three places — the two volume
+mounts for `workspace` and `dnslab`, and the matching
+`DNSLAB_HOST_WORKSPACE` / `DNSLAB_HOST_DNSLAB` environment variables
+(dnslab passes these to the docker daemon when starting sibling
+containers, so they must be the *host-side* paths on the new machine).
+Also check the host's docker gid (`getent group docker`) and set
+`DOCKER_GID` in `.env` if it isn't 958.
+
+Rather than rebuilding, the image itself can be moved with
+`docker save registry.devries.tv/gpt-jupyter-dns:latest | ssh newhost docker load`
+or pulled from the registry/GHCR (see CI/CD below).
 
 ## CI/CD
 
