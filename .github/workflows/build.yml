@@ -38,7 +38,7 @@ jobs:
     name: Lint Dockerfile
     runs-on: [self-hosted, Linux, X64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -54,7 +54,7 @@ jobs:
       packages: write          # push to GHCR
       security-events: write   # upload Trivy SARIF
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Plain `docker build` on the self-hosted box: the daemon's persistent
       # layer cache makes rebuilds fast without shipping cache to/from GitHub.
