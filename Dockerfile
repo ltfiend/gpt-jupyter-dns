@@ -15,8 +15,8 @@ RUN curl -fsSL https://go.dev/dl/go1.27.1.linux-amd64.tar.gz | tar -C /usr/local
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Build flamethrower and strip symbols to shrink the binary
-RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrower.git /tmp/flamethrower \
-  && cd /tmp/flamethrower \
+WORKDIR /tmp/flamethrower
+RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrower.git . \
   && meson setup build --buildtype=release --strip \
   && ninja -C build \
   && cp build/flame /usr/local/bin/flame \
@@ -24,8 +24,8 @@ RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrowe
 
 # Build dnspyre (actively maintained dnstrace successor) from source.
 # CGO_ENABLED=0 + -s -w strips the resulting binary (~40MB → ~15MB).
-RUN git clone --branch v3.12.0 --depth 1 https://github.com/Tantalor93/dnspyre.git /tmp/dnspyre \
-  && cd /tmp/dnspyre \
+WORKDIR /tmp/dnspyre
+RUN git clone --branch v3.12.0 --depth 1 https://github.com/Tantalor93/dnspyre.git . \
   && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/dnspyre .
 
 # ── runtime stage ──
