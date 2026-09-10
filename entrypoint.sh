@@ -1,5 +1,5 @@
-# dns-notebook/docker/entrypoint.sh
 #!/usr/bin/env bash
+# dns-notebook/docker/entrypoint.sh
 set -euo pipefail
 
 # Default workspace layout

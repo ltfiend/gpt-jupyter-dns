@@ -66,6 +66,12 @@ jobs:
             --file Dockerfile \
             .
 
+      # The two steps below bind-mount checkout dirs into the container and
+      # read them as nbuser (uid 1000). Checkout modes follow the runner
+      # user's umask, so normalize world-readability explicitly.
+      - name: Normalize checkout perms for in-container mounts
+        run: chmod -R a+rX test dnslab
+
       - name: Smoke test (tools + Python libs)
         run: |
           docker run --rm \

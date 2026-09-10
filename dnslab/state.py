@@ -31,18 +31,31 @@ def workspace_root() -> Path:
     return repo / "workspace"
 
 
-def certs_dir() -> Path:
-    d = workspace_root() / "certs" / "dnslab"
+def _mkdir_traversable(d: Path, stop: Path) -> Path:
+    """mkdir -p, then force 755 on each created level below `stop`.
+
+    Server containers read certs/configs from these trees as arbitrary
+    uids; a restrictive umask would otherwise block traversal.
+    """
     d.mkdir(parents=True, exist_ok=True)
+    p = d
+    while p != stop and p != p.parent:
+        p.chmod(0o755)
+        p = p.parent
     return d
+
+
+def certs_dir() -> Path:
+    root = workspace_root()
+    return _mkdir_traversable(root / "certs" / "dnslab", stop=root)
 
 
 def state_dir(instance: str | None = None) -> Path:
-    d = workspace_root() / "dnslab-state"
+    root = workspace_root()
+    d = root / "dnslab-state"
     if instance:
         d = d / instance
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    return _mkdir_traversable(d, stop=root)
 
 
 def to_host_path(path: Path | str) -> str:

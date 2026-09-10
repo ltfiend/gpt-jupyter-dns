@@ -110,6 +110,10 @@ class DockerProvider(Provider):
         rendered = env.get_template(profile.template).render(**ctx)
         config_file = inst_dir / (profile.template.rsplit("/", 1)[-1].removesuffix(".j2"))
         config_file.write_text(rendered)
+        # Bind-mounted into containers whose servers drop to non-root users;
+        # don't let the caller's umask (or the checkout's modes, via copytree)
+        # make these unreadable there.
+        config_file.chmod(0o644)
 
         zones_src = spec.dir / "zones"
         zones_dst = inst_dir / "zones"
@@ -117,6 +121,9 @@ class DockerProvider(Provider):
             if zones_dst.exists():
                 shutil.rmtree(zones_dst)
             shutil.copytree(zones_src, zones_dst)
+            zones_dst.chmod(0o755)
+            for p in zones_dst.rglob("*"):
+                p.chmod(0o755 if p.is_dir() else 0o644)
         return config_file, (zones_dst if zones_src.is_dir() else None)
 
     # ---- lifecycle ---------------------------------------------------------
