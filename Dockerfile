@@ -136,11 +136,10 @@ RUN mkdir /workspace; chown nbuser:named /workspace
 
 # Jupyter server config — disables kernel culling, raises iopub rate
 # limits, and enables websocket keepalive so 30min+ cells survive.
-COPY jupyter_server_config.py /etc/jupyter/jupyter_server_config.py
+COPY --chmod=644 jupyter_server_config.py /etc/jupyter/jupyter_server_config.py
 
 # Startup helper: pull from Git or S3 if configured
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER nbuser
 WORKDIR /workspace
