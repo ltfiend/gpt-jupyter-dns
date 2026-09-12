@@ -92,6 +92,11 @@ jobs:
       - name: Trivy scan (SARIF for Security tab)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          # Trivy CLI newer than the action's bundled default (v0.70.0).
+          # NOTE: Dependabot only tracks the `uses:` tag above, not this
+          # input — bump manually, or drop it once an action release
+          # bundles >= this version.
+          version: v0.74.0
           image-ref: ${{ env.CI_TAG }}
           format: sarif
           output: trivy-results.sarif
@@ -109,6 +114,7 @@ jobs:
       - name: Trivy scan (human-readable summary)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0  # keep in sync with the SARIF step above
           image-ref: ${{ env.CI_TAG }}
           format: table
           severity: CRITICAL,HIGH
