@@ -1,7 +1,12 @@
 # gpt-jupyter-dns/compose.yml
 services:
   dns-notebook:
-    build: .
+    build:
+      context: .
+      # RHSM org id + activation key for the UBI9 entitled installs,
+      # mounted as a BuildKit secret (never baked into the image).
+      secrets:
+        - rhsm
     image: registry.devries.tv/gpt-jupyter-dns:latest
     container_name: dns-notebook
     ports:
@@ -38,6 +43,12 @@ services:
       - "${DOCKER_GID:-958}"
     networks:
       - dnslab
+
+# RHSM activation credentials: KEY=value lines (RHSM_ORG_ID,
+# RHSM_ACTIVATION_KEY), chmod 600, from console.redhat.com -> Activation Keys.
+secrets:
+  rhsm:
+    file: ${HOME}/.rhsm-activation
 
 # Shared network for the notebook + DNS-server containers; server instances
 # get aliases like unbound.dnslab.test so TLS hostname validation works.

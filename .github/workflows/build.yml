@@ -59,9 +59,14 @@ jobs:
       # Plain `docker build` on the self-hosted box: the daemon's persistent
       # layer cache makes rebuilds fast without shipping cache to/from GitHub.
       # (No buildx needed — this runner only has the classic builder.)
+      # The UBI9 image needs RHSM activation credentials for its entitled
+      # installs; the self-hosted runner keeps them in ~/.rhsm-activation
+      # (chmod 600, KEY=value lines), passed as a BuildKit secret so they
+      # never land in image history.
       - name: Build image
         run: |
           DOCKER_BUILDKIT=1 docker build \
+            --secret id=rhsm,src="$HOME/.rhsm-activation" \
             --tag "${{ env.CI_TAG }}" \
             --file Dockerfile \
             .

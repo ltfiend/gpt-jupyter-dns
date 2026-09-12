@@ -23,8 +23,13 @@ ignored:
   #         building q/dnspyre are deliberately unpinned so the weekly
   #         rebuild picks up newly patched x/crypto, x/net, etc.
   - DL3062
+  # DL3041: pin dnf versions — same policy as DL3008: rebuilds should pick
+  #         up the latest security-patched EL9 packages.
+  - DL3041
 
 trustedRegistries:
   - docker.io
   - registry.devries.tv
   - ghcr.io
+  # Red Hat UBI base images (feature/ubi9)
+  - registry.access.redhat.com
