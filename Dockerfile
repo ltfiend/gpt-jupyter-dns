@@ -1,7 +1,7 @@
 # dns-notebook/Dockerfile
 
 # ── builder stage: compile flamethrower and dnspyre ──
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates git \
@@ -45,7 +45,7 @@ RUN git clone --branch v0.19.12 --depth 1 https://github.com/natesales/q.git . \
   && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/q .
 
 # ── runtime stage ──
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
