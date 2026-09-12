@@ -19,6 +19,10 @@ ignored:
   # DL3059: multiple consecutive RUNs — layers are grouped for readability
   #         and cache locality, not squashed.
   - DL3059
+  # DL3062: pin go module versions — the `go get ...@latest` bumps before
+  #         building q/dnspyre are deliberately unpinned so the weekly
+  #         rebuild picks up newly patched x/crypto, x/net, etc.
+  - DL3062
 
 trustedRegistries:
   - docker.io

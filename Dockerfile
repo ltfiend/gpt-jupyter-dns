@@ -24,9 +24,25 @@ RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrowe
 
 # Build dnspyre (actively maintained dnstrace successor) from source.
 # CGO_ENABLED=0 + -s -w strips the resulting binary (~40MB → ~15MB).
+# The go.mod pins carry known CVEs (x/crypto, x/image); bump them to the
+# latest patched releases before building.
 WORKDIR /tmp/dnspyre
 RUN git clone --branch v3.12.0 --depth 1 https://github.com/Tantalor93/dnspyre.git . \
+  && go get golang.org/x/crypto@latest golang.org/x/image@latest \
+  && go mod tidy \
   && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/dnspyre .
+
+# Build q (natesales/q, multi-protocol DNS client) from source instead of
+# using the release binary: upstream's v0.19.12 build ships a stale Go
+# toolchain and x/crypto//x/net/quic-go pins with dozens of known CVEs
+# (incl. a CRITICAL in the Go stdlib). Building here with the current Go
+# plus dependency bumps clears all of them.
+WORKDIR /tmp/q
+RUN git clone --branch v0.19.12 --depth 1 https://github.com/natesales/q.git . \
+  && go get golang.org/x/crypto@latest golang.org/x/net@latest \
+       golang.org/x/text@latest github.com/quic-go/quic-go@latest \
+  && go mod tidy \
+  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/q .
 
 # ── runtime stage ──
 FROM python:3.13-slim
@@ -49,7 +65,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #     awscli v1 which shares botocore with boto3 (~20MB net).
 #   - vim: Jupyter ships its own editor; containers should stay lean.
 #   - Chromium sandboxing libs are pulled in as runtime deps below.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `upgrade` pulls point-release security fixes newer than the base-image
+# snapshot (e.g. libevent deb13u1) without waiting for a new python:slim.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates curl git jq less tini \
     bind9-dnsutils \
     knot-dnsutils \
@@ -72,10 +90,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy built binaries from builder
 COPY --from=builder /usr/local/bin/flame /usr/local/bin/flame
 COPY --from=builder /usr/local/bin/dnspyre /usr/local/bin/dnspyre
-
-# Install q (natesales/q) DNS client
-RUN curl -fsSL https://github.com/natesales/q/releases/download/v0.19.12/q_0.19.12_linux_amd64.tar.gz \
-    | tar -xz -C /usr/local/bin q
+COPY --from=builder /usr/local/bin/q /usr/local/bin/q
 
 # Install dnsperftest (shell script). Remove .git to save a few hundred KB.
 RUN git clone --depth 1 https://github.com/cleanbrowsing/dnsperftest.git /opt/dnsperftest \
@@ -95,7 +110,11 @@ RUN curl -fsSL https://raw.githubusercontent.com/ltfiend/dns-scripts/refs/heads/
 # - `--no-compile` skips writing .pyc files during install (~15% smaller);
 #   Python will compile on demand at runtime.
 # Post-install cleanup trims test suites and caches that ship inside wheels.
-RUN pip install --no-cache-dir --no-compile \
+# The pip self-upgrade keeps its _vendor pins (msgpack, setuptools/
+# pkg_resources) current as new pip releases land on the weekly rebuild;
+# known-unfixable vendored CVEs are documented in .trivyignore.
+RUN pip install --no-cache-dir --no-compile --upgrade pip \
+  && pip install --no-cache-dir --no-compile \
         jupyterlab \
         ipywidgets \
         dnspython \

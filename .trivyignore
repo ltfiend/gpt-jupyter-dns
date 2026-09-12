@@ -1,0 +1,19 @@
+# Findings accepted as unfixable, with reasons. Trivy reads this file
+# automatically when scans run from the repo root (as CI does).
+#
+# The three entries below are pip's *vendored* copies of msgpack and
+# setuptools/pkg_resources (site-packages/pip/_vendor/vendor.txt), not
+# installed packages — `pip install -U ...` cannot touch them, and as of
+# pip 26.2.1 no released pip bumps them (setuptools==70.3.0 persists even
+# on pip main). The vulnerable code paths (easy_install/PackageIndex,
+# msgpack deserialization of untrusted input) are not reachable through
+# pip's internal use. The Dockerfile self-upgrades pip on every build, so
+# these clear automatically once a pip release bumps the pins —
+# re-evaluate when that happens.
+
+# setuptools (vendored in pip): path traversal in PackageIndex.download
+CVE-2025-47273
+# setuptools (vendored in pip)
+CVE-2026-59890
+# msgpack (vendored in pip): pip main already bumps to 1.2.1, unreleased
+GHSA-6v7p-g79w-8964
