@@ -115,6 +115,14 @@ RUN git clone --branch v0.19.12 --depth 1 https://github.com/natesales/q.git . \
   && go mod tidy \
   && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/local/bin/q .
 
+# Stage everything the runtime needs under one tree so the runtime pulls
+# it in with a single COPY layer (mirrors /usr/local/{bin,lib,lib64}).
+RUN mkdir -p /out/bin /out/lib /out/lib64 \
+  && cp /usr/local/bin/flame /usr/local/bin/dnspyre /usr/local/bin/q \
+       /usr/local/bin/drill /out/bin/ \
+  && cp -P /usr/local/lib/libldns.so.* /out/lib/ \
+  && cp -P /usr/local/lib64/libuv.so.* /out/lib64/
+
 # ── runtime stage ──
 FROM registry.access.redhat.com/ubi9/ubi:latest@sha256:206b65b8ee0f04b992818c9a51b29081b14974630d4850bc358097d0c44ea156
 
@@ -166,25 +174,26 @@ RUN --mount=type=secret,id=rhsm \
     /etc/yum.repos.d/redhat.repo; \
   exit $rc
 
-# Copy built binaries from builder; /usr/local/lib is not on EL9's default
-# linker path, so register it for libldns (drill, flame)
-COPY --from=builder /usr/local/bin/flame /usr/local/bin/flame
-COPY --from=builder /usr/local/bin/dnspyre /usr/local/bin/dnspyre
-COPY --from=builder /usr/local/bin/q /usr/local/bin/q
-COPY --from=builder /usr/local/bin/drill /usr/local/bin/drill
-COPY --from=builder /usr/local/lib/libldns.so.* /usr/local/lib/
-COPY --from=builder /usr/local/lib64/libuv.so.* /usr/local/lib64/
-RUN printf '/usr/local/lib\n/usr/local/lib64\n' > /etc/ld.so.conf.d/usr-local.conf && ldconfig
+# All builder artifacts (flame, dnspyre, q, drill, libldns, libuv) in one
+# layer, from the staging tree assembled at the end of the builder stage
+COPY --from=builder /out/ /usr/local/
 
-# Install dnsperftest (shell script). Remove .git to save a few hundred KB.
-RUN git clone --depth 1 https://github.com/cleanbrowsing/dnsperftest.git /opt/dnsperftest \
-  && rm -rf /opt/dnsperftest/.git
-
-# Install dot-cert-tester (DoT certificate testing tool)
-RUN curl -fsSL https://raw.githubusercontent.com/ltfiend/dns-scripts/refs/heads/main/dot-cert-tester.py \
-    -o /opt/dot-cert-tester.py \
+# Small setup, one layer: register /usr/local/{lib,lib64} with the linker
+# (not on EL9's default path — libldns/libuv for drill and flame), fetch
+# dnsperftest + dot-cert-tester, create the non-root user (the bind RPM
+# already created the `named` group; membership kept for parity with the
+# Debian image) and the workspace mount point.
+RUN printf '/usr/local/lib\n/usr/local/lib64\n' > /etc/ld.so.conf.d/usr-local.conf \
+  && ldconfig \
+  && git clone --depth 1 https://github.com/cleanbrowsing/dnsperftest.git /opt/dnsperftest \
+  && rm -rf /opt/dnsperftest/.git \
+  && curl -fsSL https://raw.githubusercontent.com/ltfiend/dns-scripts/refs/heads/main/dot-cert-tester.py \
+       -o /opt/dot-cert-tester.py \
   && chmod +x /opt/dot-cert-tester.py \
-  && ln -s /opt/dot-cert-tester.py /usr/bin/dot-cert-tester
+  && ln -s /opt/dot-cert-tester.py /usr/bin/dot-cert-tester \
+  && useradd -m -u 1000 -G named -s /bin/bash nbuser \
+  && mkdir /workspace \
+  && chown nbuser:named /workspace
 
 # Python 3.12 venv with the notebook stack (same package set as the Debian
 # image; see that Dockerfile's comments for the individual rationales).
@@ -221,11 +230,6 @@ RUN python3.12 -m venv /opt/venv \
 RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
   && playwright install --only-shell chromium \
   && chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"
-
-# Non-root user; the bind RPM already created the `named` group, add nbuser
-# to it for parity with the Debian image
-RUN useradd -m -u 1000 -G named -s /bin/bash nbuser
-RUN mkdir /workspace; chown nbuser:named /workspace
 
 # Jupyter server config — disables kernel culling, raises iopub rate
 # limits, and enables websocket keepalive so 30min+ cells survive.
