@@ -34,6 +34,7 @@ def dummy_context(spec, profile) -> dict:
         "listen_dot": "dot" in profile.listeners,
         "port_do53": spec.ports.get("do53", 53),
         "port_dot": spec.ports.get("dot", 853),
+        "upstream_ca_path": None,
         "upstream_do53": DUMMY_UPSTREAM,
         "upstream_dot": {**DUMMY_UPSTREAM, "port": 853},
         **profile.extra,

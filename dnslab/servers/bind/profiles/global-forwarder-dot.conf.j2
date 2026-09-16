@@ -1,8 +1,10 @@
 // dnslab bind — GLOBAL forwarder over DoT ({{ instance_name }})
 // Forwards everything (options-level forwarders, forward only) over TLS to
 // real upstream resolvers, validating their certs against the system CA
-// bundle. DNSSEC validation is ON (built-in root trust anchor), so AD in
-// answers reflects this server's own validation.
+// bundle — or the caller-supplied bundle when upstream_ca is passed to
+// dnslab.start() (private-CA upstreams). DNSSEC validation is ON (built-in
+// root trust anchor), so AD in answers reflects this server's own
+// validation.
 
 {% if listen_dot %}
 tls dnslab-tls {
@@ -13,7 +15,7 @@ tls dnslab-tls {
 
 {% for up in upstreams %}
 tls upstream{{ loop.index0 }} {
-    ca-file "/etc/ssl/certs/ca-certificates.crt";
+    ca-file "{{ upstream_ca_path or '/etc/ssl/certs/ca-certificates.crt' }}";
     remote-hostname "{{ up.tls_hostname }}";
 };
 {% endfor %}

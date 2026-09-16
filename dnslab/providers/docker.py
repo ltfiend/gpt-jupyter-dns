@@ -14,6 +14,7 @@ import hashlib
 import json
 import shutil
 import time
+from pathlib import Path
 
 import jinja2
 
@@ -103,6 +104,10 @@ class DockerProvider(Provider):
             "listen_dot": "dot" in profile.listeners,
             "port_do53": spec.ports.get("do53", 53),
             "port_dot": spec.ports.get("dot", 853),
+            # container path of a caller-supplied CA bundle for validating
+            # UPSTREAM certs (global-forwarder-dot profiles); None means the
+            # server uses its system CA store. Set via start(upstream_ca=...).
+            "upstream_ca_path": None,
             **self.upstreams(),
             **profile.extra,
             **(overrides or {}),
@@ -128,7 +133,8 @@ class DockerProvider(Provider):
 
     # ---- lifecycle ---------------------------------------------------------
     @staticmethod
-    def _confhash(spec: ServerSpec, config_file, zones_dir) -> str:
+    def _confhash(spec: ServerSpec, config_file, zones_dir,
+                  extra: bytes = b"") -> str:
         """Fingerprint of everything that shapes a running container, so
         start() can tell an unchanged instance from config drift."""
         h = hashlib.sha256()
@@ -138,6 +144,7 @@ class DockerProvider(Provider):
                 h.update(f.name.encode())
                 h.update(f.read_bytes())
         h.update(json.dumps([spec.image, spec.build, spec.command]).encode())
+        h.update(extra)
         return h.hexdigest()[:16]
 
     def start(self, spec: ServerSpec, profile: Profile, instance_name: str,
@@ -149,8 +156,27 @@ class DockerProvider(Provider):
             timeout = float(spec.raw.get("start_timeout", 60))
         self.ensure_network()
         certs.ensure_cert(instance_name)
+
+        # Optional caller-supplied CA bundle for validating upstream certs
+        # (global-forwarder-dot to a private-CA resolver). Staged into the
+        # certs dir, which every server container already mounts read-only
+        # at CERTS_MOUNT; its bytes join the confhash so swapping the CA
+        # content (same path) still counts as config drift.
+        overrides = dict(overrides)
+        upstream_ca = overrides.pop("upstream_ca", None)
+        ca_bytes = b""
+        if upstream_ca:
+            ca_src = Path(upstream_ca).expanduser()
+            if not ca_src.is_file():
+                raise FileNotFoundError(f"upstream_ca not found: {ca_src}")
+            ca_bytes = ca_src.read_bytes()
+            ca_dst = certs.certs_dir() / f"upstream-ca-{instance_name}.pem"
+            ca_dst.write_bytes(ca_bytes)
+            ca_dst.chmod(0o644)
+            overrides["upstream_ca_path"] = f"{CERTS_MOUNT}/{ca_dst.name}"
+
         config_file, zones_dir = self.render(spec, profile, instance_name, overrides)
-        confhash = self._confhash(spec, config_file, zones_dir)
+        confhash = self._confhash(spec, config_file, zones_dir, extra=ca_bytes)
 
         # Reuse a running container whose profile AND rendered config are
         # unchanged and that still answers its healthcheck; anything else

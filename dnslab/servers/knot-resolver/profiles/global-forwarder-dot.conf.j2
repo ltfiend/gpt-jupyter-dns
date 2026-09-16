@@ -1,7 +1,9 @@
 -- dnslab knot-resolver (kresd 5.x, lua): GLOBAL forwarder over DoT
 -- ({{ instance_name }}) — everything is forwarded over TLS to real upstream
--- resolvers. No ca_file: kresd validates upstream certs against the system
--- CA store when only hostname is given. DNSSEC validation stays ON (the
+-- resolvers. Without upstream_ca, no ca_file is set and kresd validates
+-- upstream certs against the system CA store (hostname-only TLS_FORWARD);
+-- with upstream_ca passed to dnslab.start(), that bundle is pinned via
+-- ca_file= instead (private-CA upstreams). DNSSEC validation stays ON (the
 -- compiled-in root trust anchor, keyfile_default), so AD in answers
 -- reflects this server's own validation.
 
@@ -20,6 +22,6 @@ net.listen('0.0.0.0', {{ port_dot }}, { kind = 'tls' })
 
 policy.add(policy.all(policy.TLS_FORWARD({
 {% for up in upstreams %}
-    { '{{ up.ip }}@{{ up.port | default(853) }}', hostname = '{{ up.tls_hostname }}' },
+    { '{{ up.ip }}@{{ up.port | default(853) }}', hostname = '{{ up.tls_hostname }}'{% if upstream_ca_path %}, ca_file = '{{ upstream_ca_path }}'{% endif %} },
 {% endfor %}
 })))

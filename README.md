@@ -128,6 +128,10 @@ dnslab.start('knot', profile='auth-both')       # plain 53 + TLS 853 together
 dnslab.start('unbound', profile='global-forwarder-dot',
              upstreams=[{'ip': '9.9.9.9', 'port': 853,
                          'tls_hostname': 'dns.quad9.net'}])
+dnslab.start('unbound', profile='global-forwarder-dot',   # private-CA upstream
+             upstreams=[{'ip': '10.0.0.53', 'port': 853,
+                         'tls_hostname': 'rec.corp.example'}],
+             upstream_ca='/workspace/my-corp-ca.pem')
 dnslab.start('unbound', force=True)             # recreate even if healthy
 dnslab.status()                                 # all instances, both providers
 dnslab.logs('unbound')
