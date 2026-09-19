@@ -7,7 +7,7 @@ resolution_type: GETDNS_RESOLUTION_STUB
 dns_transport_list:
   - GETDNS_TRANSPORT_TLS
 tls_authentication: GETDNS_AUTHENTICATION_REQUIRED
-{% if upstream_ca_path %}
+{% if upstream_ca_path | default(none) %}
 tls_ca_file: "{{ upstream_ca_path }}"
 {% else %}
 tls_ca_file: "/etc/ssl/certs/ca-certificates.crt"

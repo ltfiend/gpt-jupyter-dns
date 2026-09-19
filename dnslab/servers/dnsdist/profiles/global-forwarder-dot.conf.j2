@@ -13,6 +13,6 @@ addTLSLocal('0.0.0.0:{{ port_dot }}', '{{ tls_cert_path }}', '{{ tls_key_path }}
 newServer({address='{{ up.ip }}:{{ up.port | default(853) }}',
            tls='openssl',
            subjectName='{{ up.tls_hostname }}',
-           caStore='{{ upstream_ca_path or "/etc/ssl/certs/ca-certificates.crt" }}',
+           caStore='{{ (upstream_ca_path | default(none)) or "/etc/ssl/certs/ca-certificates.crt" }}',
            validateCertificates=true})
 {% endfor %}

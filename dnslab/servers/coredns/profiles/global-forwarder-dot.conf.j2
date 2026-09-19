@@ -10,7 +10,7 @@
 .:{{ port_do53 }} {
     forward . tls://{{ up.ip }}:{{ up.port | default(853) }} {
         tls_servername {{ up.tls_hostname }}
-{% if upstream_ca_path %}
+{% if upstream_ca_path | default(none) %}
         tls {{ upstream_ca_path }}
 {% else %}
         tls
@@ -23,7 +23,7 @@ tls://.:{{ port_dot }} {
     tls {{ tls_cert_path }} {{ tls_key_path }}
     forward . tls://{{ up.ip }}:{{ up.port | default(853) }} {
         tls_servername {{ up.tls_hostname }}
-{% if upstream_ca_path %}
+{% if upstream_ca_path | default(none) %}
         tls {{ upstream_ca_path }}
 {% else %}
         tls

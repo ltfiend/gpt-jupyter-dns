@@ -25,7 +25,7 @@ server:
 {% endif %}
     access-control: 0.0.0.0/0 allow
     # upstream cert validation: caller-supplied CA, else the system bundle
-    tls-cert-bundle: "{{ upstream_ca_path or '/etc/ssl/certs/ca-certificates.crt' }}"
+    tls-cert-bundle: "{{ (upstream_ca_path | default(none)) or '/etc/ssl/certs/ca-certificates.crt' }}"
     module-config: "validator iterator"
     auto-trust-anchor-file: "/etc/unbound/root.key"
     # deterministic healthcheck answer that needs no upstream

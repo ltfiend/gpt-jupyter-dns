@@ -15,7 +15,7 @@ tls dnslab-tls {
 
 {% for up in upstreams %}
 tls upstream{{ loop.index0 }} {
-    ca-file "{{ upstream_ca_path or '/etc/ssl/certs/ca-certificates.crt' }}";
+    ca-file "{{ (upstream_ca_path | default(none)) or '/etc/ssl/certs/ca-certificates.crt' }}";
     remote-hostname "{{ up.tls_hostname }}";
 };
 {% endfor %}

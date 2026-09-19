@@ -22,6 +22,6 @@ net.listen('0.0.0.0', {{ port_dot }}, { kind = 'tls' })
 
 policy.add(policy.all(policy.TLS_FORWARD({
 {% for up in upstreams %}
-    { '{{ up.ip }}@{{ up.port | default(853) }}', hostname = '{{ up.tls_hostname }}'{% if upstream_ca_path %}, ca_file = '{{ upstream_ca_path }}'{% endif %} },
+    { '{{ up.ip }}@{{ up.port | default(853) }}', hostname = '{{ up.tls_hostname }}'{% if upstream_ca_path | default(none) %}, ca_file = '{{ upstream_ca_path }}'{% endif %} },
 {% endfor %}
 })))
