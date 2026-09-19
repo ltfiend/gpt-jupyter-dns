@@ -3,6 +3,7 @@ data/*
 !data/dns-dot-migration-test.ipynb
 !data/dns-resolver-fuzzer.ipynb
 !data/dot-forwarding-lab.ipynb
+!data/dot-functionality-test-plan.ipynb
 workspace/
 
 # Secrets and credentials
