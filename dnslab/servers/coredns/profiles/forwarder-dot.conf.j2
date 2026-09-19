@@ -1,0 +1,23 @@
+# dnslab coredns: forwarder, DoT upstream ({{ instance_name }})
+# Serves lab.test on Do53 + DoT; forwards it to the DoT-ONLY lab-auth
+# instance over TLS 853, validating the upstream cert against the lab CA
+# (forward-plugin `tls <CA>` one-arg form) with SNI/verification name from
+# tls_servername. That upstream has no port 53 at all, so any lab.test
+# answer (marker TXT "dot") proves TLS was used upstream.
+{% if listen_do53 %}
+lab.test:{{ port_do53 }} {
+    forward . tls://{{ upstream_dot.ip }}:{{ upstream_dot.port }} {
+        tls_servername {{ upstream_dot.tls_hostname }}
+        tls {{ ca_path }}
+    }
+}
+{% endif %}
+{% if listen_dot %}
+tls://lab.test:{{ port_dot }} {
+    tls {{ tls_cert_path }} {{ tls_key_path }}
+    forward . tls://{{ upstream_dot.ip }}:{{ upstream_dot.port }} {
+        tls_servername {{ upstream_dot.tls_hostname }}
+        tls {{ ca_path }}
+    }
+}
+{% endif %}

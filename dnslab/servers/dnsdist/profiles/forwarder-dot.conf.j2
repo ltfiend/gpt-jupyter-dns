@@ -1,0 +1,20 @@
+-- dnslab dnsdist: forwarder/proxy, DoT upstream ({{ instance_name }})
+-- Listens Do53 + DoT; proxies everything to the DoT-ONLY lab-auth instance
+-- over TLS 853 with full cert validation against the lab CA. That upstream
+-- has no port 53 at all, so any lab.test answer (marker TXT "dot") proves
+-- TLS was used upstream.
+setACL({'0.0.0.0/0'})
+{% if listen_do53 %}
+setLocal('0.0.0.0:{{ port_do53 }}', {})
+{% endif %}
+{% if listen_dot %}
+addTLSLocal('0.0.0.0:{{ port_dot }}', '{{ tls_cert_path }}', '{{ tls_key_path }}')
+{% endif %}
+-- checkName/checkType: the auth-only upstream answers lab.test SOA, not
+-- dnsdist's default a.root-servers.net probe.
+newServer({address='{{ upstream_dot.ip }}:{{ upstream_dot.port }}',
+           tls='openssl',
+           subjectName='{{ upstream_dot.tls_hostname }}',
+           caStore='{{ ca_path }}',
+           validateCertificates=true,
+           checkName='lab.test.', checkType='SOA'})

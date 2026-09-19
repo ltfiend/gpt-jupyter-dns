@@ -1,0 +1,50 @@
+# dnsdist (PowerDNS) — DNS proxy / load balancer under test. The only
+# non-resolver forwarder in the roster: it terminates DoT on the front and
+# opens DoT to its backends, so both directions are native TLS.
+#
+# The image entrypoint is tini + dnsdist-startup, which execs
+# `dnsdist --supervised --disable-syslog <our args>` — so `command` below
+# is ARGUMENTS (the config file), not a full command line.
+#
+# Backend health checks are dnsdist's own: the lab profiles pin
+# checkName=lab.test/SOA so the auth-only lab upstreams count as healthy
+# (the default a.root-servers.net probe would mark them down).
+name: dnsdist
+tier: 1
+provider: docker
+image: powerdns/dnsdist-20:2.0.9
+command: ["-C", "/dnslab/config/dnsdist.conf"]
+capabilities:
+  roles: [forwarder]
+  do53_listener: true
+  # Verified live (2.0.9): addTLSLocal() serves TLS on 853 with the lab
+  # cert; dnspython + kdig validate against the lab CA.
+  dot_listener: true
+  # Verified live (2.0.9): newServer{tls='openssl', subjectName=...,
+  # caStore=lab CA, validateCertificates=true} to the DoT-only lab-auth
+  # upstream; marker TXT came back "dot". Wrong CA -> backend marked down.
+  dot_upstream_forwarding: true
+  notes: "dnsdist 2.0.9 proxy/LB; Lua config; native DoT both directions with backend cert validation."
+default_profile: forwarder-dot
+profiles:
+  forwarder-do53:
+    template: profiles/forwarder-do53.conf.j2
+    config_path: /dnslab/config/dnsdist.conf
+    listeners: [do53, dot]
+  forwarder-dot:
+    template: profiles/forwarder-dot.conf.j2
+    config_path: /dnslab/config/dnsdist.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+  # Proxies EVERYTHING over TLS to real upstreams (system CA store, or the
+  # caller-supplied bundle via dnslab.start(..., upstream_ca=...)).
+  global-forwarder-dot:
+    template: profiles/global-forwarder-dot.conf.j2
+    config_path: /dnslab/config/dnsdist.conf
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+    upstreams:
+      - {ip: 1.1.1.1, port: 853, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, port: 853, tls_hostname: dns.quad9.net}
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

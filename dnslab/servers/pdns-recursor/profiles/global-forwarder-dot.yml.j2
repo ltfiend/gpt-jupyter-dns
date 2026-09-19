@@ -1,0 +1,24 @@
+# dnslab pdns-recursor: GLOBAL forwarder over DoT ({{ instance_name }})
+# Forwards EVERYTHING (zone .) to real upstream resolvers on port 853;
+# outgoing.dot_to_port_853 makes those connections TLS. DNSSEC validation
+# is ON so AD in answers reflects this server's own validation. NB: the
+# Recursor performs no upstream cert validation for forwarders (manifest
+# notes) — upstream_ca has no effect here.
+incoming:
+  listen:
+    - '0.0.0.0:{{ port_do53 }}'
+  allow_from:
+    - '0.0.0.0/0'
+recursor:
+  forward_zones_recurse:
+    - zone: '.'
+      forwarders:
+{% for up in upstreams %}
+        - '{{ up.ip }}:{{ up.port | default(853) }}'
+{% endfor %}
+outgoing:
+  dot_to_port_853: true
+dnssec:
+  validation: 'validate'
+logging:
+  disable_syslog: true

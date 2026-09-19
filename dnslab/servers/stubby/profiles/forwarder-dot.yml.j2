@@ -1,0 +1,18 @@
+# dnslab stubby: stub forwarder, strict DoT upstream ({{ instance_name }})
+# Listens Do53 only; sends everything to the DoT-ONLY lab-auth instance
+# over TLS 853 with GETDNS_AUTHENTICATION_REQUIRED (tls_auth_name + lab
+# CA). That upstream has no port 53 at all, so any lab.test answer (marker
+# TXT "dot") proves TLS was used upstream.
+resolution_type: GETDNS_RESOLUTION_STUB
+dns_transport_list:
+  - GETDNS_TRANSPORT_TLS
+tls_authentication: GETDNS_AUTHENTICATION_REQUIRED
+tls_ca_file: "{{ ca_path }}"
+appdata_dir: "/tmp"
+listen_addresses:
+  - 0.0.0.0@{{ port_do53 }}
+upstream_recursive_servers:
+  - address_data: {{ upstream_dot.ip }}
+    tls_port: {{ upstream_dot.port }}
+    tls_auth_name: "{{ upstream_dot.tls_hostname }}"
+idle_timeout: 10000

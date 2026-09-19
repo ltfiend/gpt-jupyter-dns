@@ -1,0 +1,25 @@
+# dnslab stubby: GLOBAL stub forwarder over strict DoT ({{ instance_name }})
+# Sends EVERYTHING to real upstream resolvers over TLS 853 with
+# GETDNS_AUTHENTICATION_REQUIRED. Validation uses the system CA store —
+# or the caller-supplied bundle when upstream_ca is passed to
+# dnslab.start() (private-CA upstreams).
+resolution_type: GETDNS_RESOLUTION_STUB
+dns_transport_list:
+  - GETDNS_TRANSPORT_TLS
+tls_authentication: GETDNS_AUTHENTICATION_REQUIRED
+{% if upstream_ca_path %}
+tls_ca_file: "{{ upstream_ca_path }}"
+{% else %}
+tls_ca_file: "/etc/ssl/certs/ca-certificates.crt"
+{% endif %}
+appdata_dir: "/tmp"
+listen_addresses:
+  - 0.0.0.0@{{ port_do53 }}
+upstream_recursive_servers:
+{% for up in upstreams %}
+  - address_data: {{ up.ip }}
+    tls_port: {{ up.port | default(853) }}
+    tls_auth_name: "{{ up.tls_hostname }}"
+{% endfor %}
+round_robin_upstreams: 1
+idle_timeout: 10000

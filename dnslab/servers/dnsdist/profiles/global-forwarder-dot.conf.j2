@@ -1,0 +1,18 @@
+-- dnslab dnsdist: GLOBAL forwarder/proxy over DoT ({{ instance_name }})
+-- Proxies EVERYTHING over TLS to real upstream resolvers, validating their
+-- certs against the system CA bundle — or the caller-supplied bundle when
+-- upstream_ca is passed to dnslab.start() (private-CA upstreams).
+setACL({'0.0.0.0/0'})
+{% if listen_do53 %}
+setLocal('0.0.0.0:{{ port_do53 }}', {})
+{% endif %}
+{% if listen_dot %}
+addTLSLocal('0.0.0.0:{{ port_dot }}', '{{ tls_cert_path }}', '{{ tls_key_path }}')
+{% endif %}
+{% for up in upstreams %}
+newServer({address='{{ up.ip }}:{{ up.port | default(853) }}',
+           tls='openssl',
+           subjectName='{{ up.tls_hostname }}',
+           caStore='{{ upstream_ca_path or "/etc/ssl/certs/ca-certificates.crt" }}',
+           validateCertificates=true})
+{% endfor %}

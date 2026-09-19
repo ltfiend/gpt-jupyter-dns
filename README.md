@@ -112,6 +112,10 @@ jinja2 config templates, no central registry). Current roster:
 | `knot-resolver` (5.7.8) | docker, `cznic/knot-resolver:v5.7.8` | recursive, forwarder | `recursive`, `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
 | `knot` (3.5.4) | docker, `cznic/knot:v3.5.4` | authoritative | `auth-do53`, `auth-dot`, `auth-both` |
 | `nsd` (4.12.0) | docker, local Alpine build | authoritative | `auth-do53`, `auth-dot`, `auth-both` |
+| `dnsdist` (2.0.9) | docker, `powerdns/dnsdist-20:2.0.9` | proxy/LB forwarder | `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
+| `coredns` (1.14.7) | docker, `coredns/coredns:1.14.7` | forwarder | `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` (first upstream only) |
+| `pdns-recursor` (5.3.10) | docker, `powerdns/pdns-recursor-53:5.3.10` | recursive, forwarder (no DoT listener; no upstream cert validation) | `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
+| `stubby` (0.4.3) | docker, local Alpine build | stub-resolver DoT client with Do53 front | `forwarder-do53`, `forwarder-dot`, `global-forwarder-dot` |
 | `lab-auth` | docker, local Alpine build | framework upstream pair | `auth-do53` + `auth-dot` (both start) |
 | `windows-dns` | EC2, Windows Server 2025 AMI | Do53 forwarder | `forwarder-do53` |
 | `windows-client-dot` | EC2, Windows Server 2025 AMI | stub-resolver DoT **client** | `stub-dot` |

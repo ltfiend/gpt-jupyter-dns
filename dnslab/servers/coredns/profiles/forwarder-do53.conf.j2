@@ -1,0 +1,15 @@
+# dnslab coredns: forwarder, plaintext upstream ({{ instance_name }})
+# Serves lab.test on Do53 + DoT; forwards it to the Do53-only lab-auth
+# instance over plain 53. Negative control for the DoT-upstream proof: the
+# transport marker in answers must read "do53".
+{% if listen_do53 %}
+lab.test:{{ port_do53 }} {
+    forward . {{ upstream_do53.ip }}:{{ upstream_do53.port }}
+}
+{% endif %}
+{% if listen_dot %}
+tls://lab.test:{{ port_dot }} {
+    tls {{ tls_cert_path }} {{ tls_key_path }}
+    forward . {{ upstream_do53.ip }}:{{ upstream_do53.port }}
+}
+{% endif %}

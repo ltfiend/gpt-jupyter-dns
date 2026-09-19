@@ -1,0 +1,55 @@
+# PowerDNS Recursor — recursive resolver / forwarder. Outgoing DoT only:
+# forwarders on port 853 are contacted over TLS when outgoing.dot_to_port_853
+# is set (on by default), but the Recursor deliberately has NO incoming DoT
+# listener — PowerDNS delegates TLS termination to dnsdist. dot_listener
+# stays false so DoT listener checks SKIP honestly.
+#
+# NB: Recursor outgoing DoT performs NO upstream certificate validation
+# (there is no CA/hostname knob for forwarders as of 5.3) — the transport
+# is TLS, verified by the lab marker, but authentication is not available.
+# upstream_ca is therefore ignored by these templates.
+#
+# The image entrypoint execs `pdns_recursor --disable-syslog <our args>`;
+# `command` is arguments only. Config is new-style YAML (old-style .conf
+# was removed in 5.2): --config-dir points at the mounted directory and
+# the file must be named recursor.yml.
+name: pdns-recursor
+tier: 1
+provider: docker
+image: powerdns/pdns-recursor-53:5.3.10
+command: ["--config-dir=/dnslab/config"]
+capabilities:
+  roles: [recursive, forwarder]
+  do53_listener: true
+  dot_listener: false            # no incoming DoT in the Recursor by design
+  # Verified live (5.3.10): forward_zones to IP:853 with
+  # outgoing.dot_to_port_853 reaches the DoT-only lab-auth upstream; the
+  # marker TXT came back "dot" (that upstream has no port 53 at all).
+  dot_upstream_forwarding: true
+  notes: >-
+    Recursor 5.3.10; outgoing DoT to port-853 forwarders, no incoming DoT
+    (use dnsdist), no upstream cert validation for forwarders.
+default_profile: forwarder-dot
+profiles:
+  forwarder-do53:
+    template: profiles/forwarder-do53.yml.j2
+    config_path: /dnslab/config/recursor.yml
+    listeners: [do53]
+  forwarder-dot:
+    template: profiles/forwarder-dot.yml.j2
+    config_path: /dnslab/config/recursor.yml
+    listeners: [do53]
+    requires: [dot_upstream_forwarding]
+  # Forwards EVERYTHING over TLS (port 853 forwarders) to real upstreams.
+  # DNSSEC validation on. No cert validation (see notes) - upstream_ca is
+  # accepted but has no effect for this server.
+  global-forwarder-dot:
+    template: profiles/global-forwarder-dot.yml.j2
+    config_path: /dnslab/config/recursor.yml
+    listeners: [do53]
+    requires: [dot_upstream_forwarding]
+    upstreams:
+      - {ip: 1.1.1.1, port: 853, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, port: 853, tls_hostname: dns.quad9.net}
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

@@ -1,0 +1,13 @@
+-- dnslab dnsdist: forwarder/proxy, plaintext upstream ({{ instance_name }})
+-- Listens Do53 + DoT; proxies everything to the Do53-only lab-auth instance
+-- over plain 53. Negative control for the DoT-upstream proof: the transport
+-- marker in answers must read "do53".
+setACL({'0.0.0.0/0'})
+{% if listen_do53 %}
+setLocal('0.0.0.0:{{ port_do53 }}', {})
+{% endif %}
+{% if listen_dot %}
+addTLSLocal('0.0.0.0:{{ port_dot }}', '{{ tls_cert_path }}', '{{ tls_key_path }}')
+{% endif %}
+newServer({address='{{ upstream_do53.ip }}:{{ upstream_do53.port }}',
+           checkName='lab.test.', checkType='SOA'})

@@ -1,0 +1,50 @@
+# CoreDNS — plugin-based DNS server (the Kubernetes default resolver),
+# here as a forwarder under test. Native DoT on both sides: a tls://
+# server block for the listener, and forward-plugin tls:// upstreams with
+# tls_servername + a CA file for validation.
+#
+# The image entrypoint is /coredns and runs as uid 65532 (nonroot);
+# `command` below is argv appended to it. Binding :53/:853 as non-root
+# works under Docker's default unprivileged-port setting.
+name: coredns
+tier: 1
+provider: docker
+image: coredns/coredns:1.14.7
+command: ["-conf", "/dnslab/config/Corefile"]
+capabilities:
+  roles: [forwarder]
+  do53_listener: true
+  # Verified live (1.14.7): tls://zone:853 server block with the lab cert;
+  # dnspython + kdig validate against the lab CA.
+  dot_listener: true
+  # Verified live (1.14.7): forward . tls://IP { tls_servername ...;
+  # tls <lab CA> } to the DoT-only lab-auth upstream; marker TXT came
+  # back "dot". Wrong CA -> forward fails (SERVFAIL).
+  dot_upstream_forwarding: true
+  notes: >-
+    CoreDNS 1.14.7. One tls_servername per forward block, so the
+    global-forwarder-dot profile uses only the FIRST configured upstream
+    (a CoreDNS forward-plugin limitation, not a lab shortcut).
+default_profile: forwarder-dot
+profiles:
+  forwarder-do53:
+    template: profiles/forwarder-do53.conf.j2
+    config_path: /dnslab/config/Corefile
+    listeners: [do53, dot]
+  forwarder-dot:
+    template: profiles/forwarder-dot.conf.j2
+    config_path: /dnslab/config/Corefile
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+  # Forwards EVERYTHING over TLS to the first real upstream (see notes);
+  # system CA store, or the caller-supplied bundle via upstream_ca.
+  global-forwarder-dot:
+    template: profiles/global-forwarder-dot.conf.j2
+    config_path: /dnslab/config/Corefile
+    listeners: [do53, dot]
+    requires: [dot_upstream_forwarding]
+    upstreams:
+      - {ip: 1.1.1.1, port: 853, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, port: 853, tls_hostname: dns.quad9.net}
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

@@ -1,0 +1,15 @@
+# dnslab stubby: stub forwarder, plaintext upstream ({{ instance_name }})
+# Listens Do53 only; sends everything to the Do53-only lab-auth instance
+# over plain UDP/TCP 53. Negative control for the DoT-upstream proof: the
+# transport marker in answers must read "do53".
+resolution_type: GETDNS_RESOLUTION_STUB
+dns_transport_list:
+  - GETDNS_TRANSPORT_UDP
+  - GETDNS_TRANSPORT_TCP
+appdata_dir: "/tmp"
+listen_addresses:
+  - 0.0.0.0@{{ port_do53 }}
+upstream_recursive_servers:
+  - address_data: {{ upstream_do53.ip }}
+    port: {{ upstream_do53.port }}
+idle_timeout: 10000

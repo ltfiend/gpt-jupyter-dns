@@ -1,0 +1,23 @@
+# dnslab pdns-recursor: forwarder, DoT upstream ({{ instance_name }})
+# Listens Do53 only (the Recursor has no incoming DoT); forwards lab.test
+# to the DoT-ONLY lab-auth instance on port 853 — outgoing.dot_to_port_853
+# turns that into TLS. No cert validation is available for forwarders (see
+# manifest notes); the transport proof is the marker TXT "dot" from an
+# upstream that has no port 53 at all.
+incoming:
+  listen:
+    - '0.0.0.0:{{ port_do53 }}'
+  allow_from:
+    - '0.0.0.0/0'
+recursor:
+  forward_zones:
+    - zone: 'lab.test'
+      forwarders:
+        - '{{ upstream_dot.ip }}:{{ upstream_dot.port }}'
+outgoing:
+  dot_to_port_853: true
+dnssec:
+  # lab.test is unsigned
+  validation: 'off'
+logging:
+  disable_syslog: true

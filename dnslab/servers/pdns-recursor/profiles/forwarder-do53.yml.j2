@@ -1,0 +1,18 @@
+# dnslab pdns-recursor: forwarder, plaintext upstream ({{ instance_name }})
+# Listens Do53 only; forwards lab.test to the Do53-only lab-auth instance
+# over plain 53. Negative control for the DoT-upstream proof: the transport
+# marker in answers must read "do53".
+incoming:
+  listen:
+    - '0.0.0.0:{{ port_do53 }}'
+  allow_from:
+    - '0.0.0.0/0'
+recursor:
+  forward_zones:
+    - zone: 'lab.test'
+      forwarders:
+        - '{{ upstream_do53.ip }}:{{ upstream_do53.port }}'
+dnssec:
+  validation: 'off'
+logging:
+  disable_syslog: true

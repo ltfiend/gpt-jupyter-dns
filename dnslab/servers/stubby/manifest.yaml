@@ -1,0 +1,44 @@
+# stubby (getdns) — the canonical DNS-over-TLS STUB resolver daemon.
+# Listens on plain Do53 for local clients and sends everything upstream
+# over DoT with strict authentication (tls_auth_name + CA file). No DoT
+# listener of its own — dot_listener stays false and those checks SKIP.
+#
+# No official image exists, so this builds locally from Alpine 3.22
+# (stubby 0.4.3-r2, verified) — same pattern as the nsd module.
+name: stubby
+tier: 1
+provider: docker
+build: docker
+capabilities:
+  roles: [stub, forwarder]
+  do53_listener: true
+  dot_listener: false            # stub daemon: plaintext listener only
+  # Verified live (0.4.3): GETDNS_TRANSPORT_TLS + tls_auth_name + the lab
+  # CA (tls_ca_file) against the DoT-only lab-auth upstream; marker TXT
+  # came back "dot". GETDNS_AUTHENTICATION_REQUIRED enforces validation.
+  dot_upstream_forwarding: true
+  dot_client: true               # it IS a DoT client with a Do53 front
+  notes: "stubby 0.4.3 (Alpine 3.22 apk); strict DoT upstream auth; Do53 listener only."
+default_profile: forwarder-dot
+profiles:
+  forwarder-do53:
+    template: profiles/forwarder-do53.yml.j2
+    config_path: /dnslab/config/stubby.yml
+    listeners: [do53]
+  forwarder-dot:
+    template: profiles/forwarder-dot.yml.j2
+    config_path: /dnslab/config/stubby.yml
+    listeners: [do53]
+    requires: [dot_upstream_forwarding]
+  # Sends EVERYTHING over strict DoT to real upstreams (system CA store,
+  # or the caller-supplied bundle via dnslab.start(..., upstream_ca=...)).
+  global-forwarder-dot:
+    template: profiles/global-forwarder-dot.yml.j2
+    config_path: /dnslab/config/stubby.yml
+    listeners: [do53]
+    requires: [dot_upstream_forwarding]
+    upstreams:
+      - {ip: 1.1.1.1, port: 853, tls_hostname: one.one.one.one}
+      - {ip: 9.9.9.9, port: 853, tls_hostname: dns.quad9.net}
+ports: {do53: 53, dot: 853}
+healthcheck: {qname: "lab.test", qtype: "SOA"}

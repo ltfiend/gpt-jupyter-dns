@@ -1,0 +1,33 @@
+# dnslab coredns: GLOBAL forwarder over DoT ({{ instance_name }})
+# Forwards EVERYTHING (zone ".") over TLS to a real upstream resolver,
+# validating its cert against the system CA bundle — or the caller-supplied
+# bundle when upstream_ca is passed to dnslab.start().
+#
+# CoreDNS allows ONE tls_servername per forward block, so only the FIRST
+# configured upstream is used (a forward-plugin limitation).
+{% set up = upstreams[0] %}
+{% if listen_do53 %}
+.:{{ port_do53 }} {
+    forward . tls://{{ up.ip }}:{{ up.port | default(853) }} {
+        tls_servername {{ up.tls_hostname }}
+{% if upstream_ca_path %}
+        tls {{ upstream_ca_path }}
+{% else %}
+        tls
+{% endif %}
+    }
+}
+{% endif %}
+{% if listen_dot %}
+tls://.:{{ port_dot }} {
+    tls {{ tls_cert_path }} {{ tls_key_path }}
+    forward . tls://{{ up.ip }}:{{ up.port | default(853) }} {
+        tls_servername {{ up.tls_hostname }}
+{% if upstream_ca_path %}
+        tls {{ upstream_ca_path }}
+{% else %}
+        tls
+{% endif %}
+    }
+}
+{% endif %}
