@@ -139,7 +139,7 @@ RUN pip install --no-cache-dir --no-compile --upgrade pip \
         pyyaml \
         cryptography \
         jinja2 \
-  && find /usr/local/lib/python3.13 -depth \
+  && find /usr/local/lib/python3.* -depth \
         \( -type d \( -name tests -o -name test -o -name __pycache__ \) \
         -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
         -exec rm -rf {} + \
