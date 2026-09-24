@@ -58,10 +58,17 @@ jobs:
 
       # Plain `docker build` on the self-hosted box: the daemon's persistent
       # layer cache makes rebuilds fast without shipping cache to/from GitHub.
-      # (No buildx needed — this runner only has the classic builder.)
+      # Scheduled/dispatched runs build with --no-cache --pull: their whole
+      # point is picking up base-image and OS security updates, which a warm
+      # layer cache would otherwise silently skip (the apt-get upgrade layer
+      # stays frozen at cache time).
       - name: Build image
         run: |
-          DOCKER_BUILDKIT=1 docker build \
+          EXTRA=""
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EXTRA="--no-cache --pull"
+          fi
+          DOCKER_BUILDKIT=1 docker build $EXTRA \
             --tag "${{ env.CI_TAG }}" \
             --file Dockerfile \
             .

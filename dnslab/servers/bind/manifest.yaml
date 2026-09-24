@@ -15,7 +15,7 @@ capabilities:
   roles: [recursive, forwarder]
   do53_listener: true
   dot_listener: true
-  # Verified live on internetsystemsconsortium/bind9:9.20 (named 9.20.24):
+  # Verified live on internetsystemsconsortium/bind9:9.20 (named 9.20.29):
   # forwarders { <ip> port 853 tls <tlsname>; } with a tls clause carrying
   # ca-file + remote-hostname forwards over TLS with strict validation —
   # the DoT-only lab upstream's marker TXT "dot" came back.
