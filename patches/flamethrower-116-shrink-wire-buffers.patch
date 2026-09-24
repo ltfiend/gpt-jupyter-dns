@@ -1,0 +1,30 @@
+query: shrink ldns_pkt2wire() output buffers
+
+From https://github.com/DNS-OARC/flamethrower/issues/116 (Michal Nowak,
+ISC): ldns_pkt2wire() always allocates LDNS_MAX_PACKETLEN (65535) bytes
+and ldns_buffer_export() never trims, so every cached wire buffer holds a
+64 KiB allocation. With large -g file -f query lists this pins gigabytes
+of heap (70k queries x 65535 B ~= 4.5 GiB RES; ~25-40 MB with the fix).
+Rebased onto vanilla v0.12.0 (the issue's hunk offsets are from ISC's
+patched tree). Drop this patch when upstream ships a release containing
+the fix.
+
+--- a/flame/query.cpp
++++ b/flame/query.cpp
+@@ -334,6 +334,16 @@
+
+     ldns_pkt2wire(dest, query, dest_len);
+     ldns_pkt_free(query);
++
++    // ldns_pkt2wire() always allocates LDNS_MAX_PACKETLEN (65535) bytes and
++    // ldns_buffer_export() never trims; shrink so a large -f query list doesn't
++    // reserve multiple GB of heap.
++    if (*dest && *dest_len > 0 && *dest_len < LDNS_MAX_PACKETLEN) {
++        uint8_t *shrunk = (uint8_t *)realloc(*dest, *dest_len);
++        if (shrunk) {
++            *dest = shrunk;
++        }
++    }
+ }
+
+ void QueryGenerator::push_rec(const char *qname, size_t len, const std::string &qtype, bool binary)

@@ -14,9 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://go.dev/dl/go1.27.1.linux-amd64.tar.gz | tar -C /usr/local -xz
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-# Build flamethrower and strip symbols to shrink the binary
+# Build flamethrower and strip symbols to shrink the binary.
+# The patch (upstream issue #116) shrinks per-query wire buffers: unpatched
+# 0.12.0 keeps 64KiB per cached query, pinning GBs of heap on large -f
+# query files. Drop once an upstream release includes the fix.
+COPY patches/flamethrower-116-shrink-wire-buffers.patch /tmp/flamethrower-116.patch
 WORKDIR /tmp/flamethrower
 RUN git clone --branch v0.12.0 --depth 1 https://github.com/DNS-OARC/flamethrower.git . \
+  && git apply -v /tmp/flamethrower-116.patch \
   && meson setup build --buildtype=release --strip \
   && ninja -C build \
   && cp build/flame /usr/local/bin/flame \
